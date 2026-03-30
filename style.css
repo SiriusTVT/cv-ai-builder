@@ -72,6 +72,36 @@ textarea, input, select {
   overflow: auto;
 }
 
+.missing-data-panel {
+  margin: 0 0 14px;
+  border: 1px solid #f4c9a0;
+  border-radius: 8px;
+  background: #fff8f2;
+  overflow: hidden;
+}
+
+.missing-data-panel summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.missing-data-preview {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7c2d12;
+  white-space: pre-wrap;
+  background: #fffdf9;
+  border-top: 1px solid #f4c9a0;
+  max-height: 220px;
+  overflow: auto;
+}
+
 .model-config,
 .template-config {
   margin-bottom: 12px;

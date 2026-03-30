@@ -65,6 +65,37 @@ function extractFragmentsByKeywords(fragments, keywords, maxItems = 4) {
   return uniqueFirst(matched, maxItems);
 }
 
+function extractEducationInstitutionHints(fragments) {
+  const universityHints = extractFragmentsByKeywords(
+    fragments,
+    ["universidad", "university", "institucion universitaria", "instituto", "politecnico", "tecnolog", "facultad"],
+    3
+  );
+  const schoolHints = extractFragmentsByKeywords(
+    fragments,
+    ["colegio", "escuela", "liceo", "institucion educativa", "bachiller"],
+    3
+  );
+  const genericEducationHints = extractFragmentsByKeywords(
+    fragments,
+    ["semestre", "educacion", "formacion", "pregrado", "maestr", "tecnico", "tecnologo", "diplomado"],
+    4
+  ).filter((fragment) => {
+    const lowered = fragment.toLowerCase();
+    const alreadyCategorized = universityHints.concat(schoolHints);
+    return !alreadyCategorized.some((item) => item.toLowerCase() === lowered);
+  });
+
+  const educationHints = uniqueFirst(
+    universityHints.map((item) => `Universidad: ${item}`)
+      .concat(schoolHints.map((item) => `Colegio: ${item}`))
+      .concat(genericEducationHints),
+    6
+  );
+
+  return { universityHints, schoolHints, educationHints };
+}
+
 function extractLocationHint(text) {
   const lowered = String(text || "").toLowerCase();
 
@@ -111,10 +142,7 @@ function buildStructuredInputBlock(inputLibre) {
   const availabilityHint = extractAvailabilityHint(raw);
   const { emails, phones } = extractContactHints(raw);
 
-  const educationHints = extractFragmentsByKeywords(
-    fragments,
-    ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "maestr", "pregrado"]
-  );
+  const educationData = extractEducationInstitutionHints(fragments);
   const experienceHints = extractFragmentsByKeywords(
     fragments,
     ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"]
@@ -148,7 +176,9 @@ function buildStructuredInputBlock(inputLibre) {
     `- Availability hint: ${availabilityHint}`,
     asBullets("Email hint", emails),
     asBullets("Phone hint", phones),
-    asBullets("Education hint", educationHints),
+    asBullets("University hint", educationData.universityHints),
+    asBullets("School hint", educationData.schoolHints),
+    asBullets("Education hint", educationData.educationHints),
     asBullets("Work experience hint", experienceHints),
     asBullets("Projects hint", projectHints),
     asBullets("Technical skills hint", skillHints),
@@ -174,6 +204,7 @@ ${structuredBlock}
 INSTRUCCION CRITICA:
 - Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
 - Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
+- En Education, conserva explicitamente los nombres de universidad y colegio cuando aparezcan.
 - No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):

@@ -71,6 +71,36 @@ def extract_fragments_by_keywords(fragments, keywords, max_items=4):
     return unique_first(output, max_items)
 
 
+def extract_education_institution_hints(fragments):
+    university_hints = extract_fragments_by_keywords(
+        fragments,
+        ["universidad", "university", "institucion universitaria", "instituto", "politecnico", "tecnolog", "facultad"],
+        3,
+    )
+    school_hints = extract_fragments_by_keywords(
+        fragments,
+        ["colegio", "escuela", "liceo", "institucion educativa", "bachiller"],
+        3,
+    )
+    generic_education_hints = extract_fragments_by_keywords(
+        fragments,
+        ["semestre", "educacion", "formacion", "pregrado", "maestr", "tecnico", "tecnologo", "diplomado"],
+        4,
+    )
+
+    categorized = {item.lower() for item in university_hints + school_hints}
+    filtered_generic_hints = [item for item in generic_education_hints if item.lower() not in categorized]
+
+    education_hints = unique_first(
+        [f"Universidad: {item}" for item in university_hints]
+        + [f"Colegio: {item}" for item in school_hints]
+        + filtered_generic_hints,
+        6,
+    )
+
+    return university_hints, school_hints, education_hints
+
+
 def extract_location_hint(text):
     lowered = str(text or "").lower()
 
@@ -110,10 +140,7 @@ def build_structured_input_block(input_libre):
     availability_hint = extract_availability_hint(raw)
     emails, phones = extract_contact_hints(raw)
 
-    education_hints = extract_fragments_by_keywords(
-        fragments,
-        ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "maestr", "pregrado"],
-    )
+    university_hints, school_hints, education_hints = extract_education_institution_hints(fragments)
     experience_hints = extract_fragments_by_keywords(
         fragments,
         ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"],
@@ -144,6 +171,8 @@ def build_structured_input_block(input_libre):
         f"- Availability hint: {availability_hint}",
         as_bullets("Email hint", emails),
         as_bullets("Phone hint", phones),
+        as_bullets("University hint", university_hints),
+        as_bullets("School hint", school_hints),
         as_bullets("Education hint", education_hints),
         as_bullets("Work experience hint", experience_hints),
         as_bullets("Projects hint", project_hints),
@@ -172,6 +201,7 @@ PRIORIDADES:
 INSTRUCCION CRITICA:
 - Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
 - Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
+- En Education, conserva explicitamente los nombres de universidad y colegio cuando aparezcan.
 - No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
