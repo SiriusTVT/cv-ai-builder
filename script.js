@@ -533,65 +533,91 @@ async function generarCV() {
   }
 }
 
-function descargarPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+async function descargarPDF() {
   const preview = document.getElementById("preview");
-  const cvOutput = preview ? preview.querySelector(".cv-output") : null;
-  const contenidoOriginal = latestCvText || (cvOutput ? cvOutput.innerText : (preview ? preview.innerText : ""));
-  const contenido = normalizarTextoParaPdf(contenidoOriginal);
+  const templateElement = preview ? preview.querySelector(".cv-template") : null;
 
-  if (!contenido.trim()) {
+  if (!templateElement) {
     if (preview) {
-      preview.innerHTML = "<p style='color: red;'>No hay contenido para exportar.</p>";
+      preview.innerHTML = "<p style='color: red;'>Genera primero tu CV para poder exportarlo en PDF.</p>";
     }
     return;
   }
 
-  const margenX = 14;
-  const margenY = 14;
-  const anchoUtil = 210 - margenX * 2;
-  const altoUtil = 297 - margenY;
-  const interlineado = 6;
-  let y = margenY;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("Hoja de Vida", margenX, y);
-  y += 10;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-
-  const bloques = contenido.split("\n");
-  for (const bloque of bloques) {
-    const texto = bloque.trim();
-
-    if (!texto) {
-      y += interlineado * 0.6;
-      if (y > altoUtil) {
-        doc.addPage();
-        y = margenY;
-      }
-      continue;
+  if (typeof window.html2canvas !== "function") {
+    if (preview) {
+      preview.innerHTML = "<p style='color: red;'>No se encontro html2canvas para exportar el diseno.</p>";
     }
-
-    const esTitulo = /^([A-Z][A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+):$/.test(texto);
-    doc.setFont("helvetica", esTitulo ? "bold" : "normal");
-
-    const lineas = doc.splitTextToSize(texto, anchoUtil);
-    for (const linea of lineas) {
-      if (y > altoUtil) {
-        doc.addPage();
-        y = margenY;
-      }
-
-      doc.text(linea, margenX, y);
-      y += interlineado;
-    }
+    return;
   }
 
-  doc.save("CV_profesional.pdf");
+  try {
+    const canvas = await window.html2canvas(templateElement, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      width: templateElement.scrollWidth,
+      height: templateElement.scrollHeight
+    });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const margin = 8;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const printableWidth = pageWidth - margin * 2;
+    const printableHeight = pageHeight - margin * 2;
+
+    const pxPerMm = canvas.width / printableWidth;
+    const pageCanvasHeightPx = Math.floor(printableHeight * pxPerMm);
+
+    let renderedHeightPx = 0;
+    let pageIndex = 0;
+
+    while (renderedHeightPx < canvas.height) {
+      const sliceHeightPx = Math.min(pageCanvasHeightPx, canvas.height - renderedHeightPx);
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeightPx;
+
+      const pageContext = pageCanvas.getContext("2d");
+      if (!pageContext) {
+        throw new Error("No se pudo crear el contexto de render.");
+      }
+
+      pageContext.drawImage(
+        canvas,
+        0,
+        renderedHeightPx,
+        canvas.width,
+        sliceHeightPx,
+        0,
+        0,
+        canvas.width,
+        sliceHeightPx
+      );
+
+      const imgData = pageCanvas.toDataURL("image/png");
+      const sliceHeightMm = sliceHeightPx / pxPerMm;
+
+      if (pageIndex > 0) {
+        doc.addPage();
+      }
+
+      doc.addImage(imgData, "PNG", margin, margin, printableWidth, sliceHeightMm, undefined, "FAST");
+
+      renderedHeightPx += sliceHeightPx;
+      pageIndex += 1;
+    }
+
+    doc.save("CV_profesional.pdf");
+  } catch (error) {
+    if (preview) {
+      const message = error && error.message ? error.message : "Error desconocido";
+      preview.innerHTML = `<p style='color: red;'>No se pudo exportar el PDF con diseno: ${escapeHtml(message)}</p>`;
+    }
+  }
 }
 
 function normalizarTextoParaPdf(texto) {
