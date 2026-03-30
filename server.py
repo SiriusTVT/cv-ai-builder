@@ -6,7 +6,12 @@ app = Flask(__name__)
 CORS(app)
 
 HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions"
-HF_MODEL = "Qwen/Qwen2.5-7B-Instruct-1M:cheapest"
+HF_MODEL_CANDIDATES = [
+    "google/gemma-2-2b-it:fastest",
+    "openai/gpt-oss-20b:fastest",
+    "openai/gpt-oss-120b:fastest",
+    "Qwen/Qwen2.5-7B-Instruct-1M:fastest",
+]
 
 
 def construir_prompt(input_libre):
@@ -55,6 +60,10 @@ def parse_hf_error(response):
     try:
         error_data = response.json()
         if isinstance(error_data, dict):
+            nested_error = error_data.get("error")
+            if isinstance(nested_error, dict):
+                if isinstance(nested_error.get("message"), str) and nested_error.get("message"):
+                    return nested_error.get("message")
             if isinstance(error_data.get("error"), str) and error_data.get("error"):
                 return error_data.get("error")
             if isinstance(error_data.get("message"), str) and error_data.get("message"):
@@ -64,6 +73,11 @@ def parse_hf_error(response):
         pass
 
     return f"Error {response.status_code}: {response.text[:200]}"
+
+
+def is_model_not_supported(error_msg):
+    normalized = str(error_msg).lower()
+    return "not supported by any provider" in normalized or "model_not_supported" in normalized
 
 
 @app.route("/api/generar-cv", methods=["POST"])
@@ -85,41 +99,57 @@ def generar_cv():
             "Content-Type": "application/json",
         }
 
-        payload = {
-            "model": HF_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Eres un experto en CVs y optimizacion ATS. Responde en espanol claro y profesional.",
-                },
-                {
-                    "role": "user",
-                    "content": construir_prompt(input_libre),
-                },
-            ],
-            "temperature": 0.4,
-            "max_tokens": 700,
-            "stream": False,
-        }
+        last_model_error = ""
 
-        response = requests.post(HF_CHAT_URL, headers=headers, json=payload, timeout=60)
+        for model in HF_MODEL_CANDIDATES:
+            payload = {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Eres un experto en CVs y optimizacion ATS. Responde en espanol claro y profesional.",
+                    },
+                    {
+                        "role": "user",
+                        "content": construir_prompt(input_libre),
+                    },
+                ],
+                "temperature": 0.4,
+                "max_tokens": 700,
+                "stream": False,
+            }
 
-        if response.status_code != 200:
-            error_msg = parse_hf_error(response)
-            return jsonify({"success": False, "error": f"Error en Hugging Face: {error_msg}"}), 400
+            response = requests.post(HF_CHAT_URL, headers=headers, json=payload, timeout=60)
 
-        response_data = response.json()
-        choices = response_data.get("choices") if isinstance(response_data, dict) else None
-        if not choices:
-            return jsonify({"success": False, "error": "Respuesta invalida de Hugging Face"}), 500
+            if response.status_code != 200:
+                error_msg = parse_hf_error(response)
+                if is_model_not_supported(error_msg):
+                    last_model_error = error_msg
+                    continue
+                return jsonify({"success": False, "error": f"Error en Hugging Face: {error_msg}"}), 400
 
-        message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
-        texto = str(message.get("content", "")).strip()
+            response_data = response.json()
+            choices = response_data.get("choices") if isinstance(response_data, dict) else None
+            if not choices:
+                last_model_error = "Respuesta invalida del proveedor para este modelo"
+                continue
 
-        if not texto:
-            return jsonify({"success": False, "error": "No se recibio contenido de la IA"}), 500
+            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+            texto = str(message.get("content", "")).strip()
 
-        return jsonify({"success": True, "texto": texto})
+            if not texto:
+                last_model_error = "No se recibio contenido de la IA"
+                continue
+
+            return jsonify({"success": True, "texto": texto, "modelo": model})
+
+        if last_model_error:
+            return jsonify({
+                "success": False,
+                "error": f"No hay modelos compatibles con tus providers habilitados. Detalle: {last_model_error}",
+            }), 400
+
+        return jsonify({"success": False, "error": "No se pudo completar la solicitud con ningun modelo"}), 500
 
     except requests.exceptions.Timeout:
         return jsonify({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}), 504
