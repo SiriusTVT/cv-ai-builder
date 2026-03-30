@@ -45,7 +45,14 @@ Genera una hoja de vida estructurada con:
 - Educacion
 - Habilidades
 
-Formato limpio, claro y listo para enviar.`;
+Formato limpio, claro y listo para enviar.
+
+REGLAS DE FORMATO OBLIGATORIAS:
+- Entrega en texto plano (sin Markdown).
+- No uses **, #, >, ni simbolos decorativos.
+- Usa solo encabezados simples con ":". Ejemplo: "Perfil profesional:".
+- Usa bullets con guion "-" para listar logros.
+- Evita caracteres raros o unicode no estandar.`;
 }
 
 function makeResponse(statusCode, payload) {

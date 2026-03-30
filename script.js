@@ -129,12 +129,103 @@ async function generarCV() {
 
 function descargarPDF() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const contenido = document.getElementById("preview").innerText;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const preview = document.getElementById("preview");
+  const cvOutput = preview.querySelector(".cv-output");
+  const contenidoOriginal = cvOutput ? cvOutput.innerText : preview.innerText;
+  const contenido = normalizarTextoParaPdf(contenidoOriginal);
 
-  const lineas = doc.splitTextToSize(contenido, 180);
-  doc.text(lineas, 10, 10);
-  doc.save("CV.pdf");
+  if (!contenido.trim()) {
+    preview.innerHTML = "<p style='color: red;'>No hay contenido para exportar.</p>";
+    return;
+  }
+
+  const margenX = 14;
+  const margenY = 14;
+  const anchoUtil = 210 - margenX * 2;
+  const altoUtil = 297 - margenY;
+  const interlineado = 6;
+  let y = margenY;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Hoja de Vida", margenX, y);
+  y += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+
+  const bloques = contenido.split("\n");
+  for (const bloque of bloques) {
+    const texto = bloque.trim();
+
+    if (!texto) {
+      y += interlineado * 0.6;
+      if (y > altoUtil) {
+        doc.addPage();
+        y = margenY;
+      }
+      continue;
+    }
+
+    const esTitulo = /^([A-Z][A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+):$/.test(texto);
+    doc.setFont("helvetica", esTitulo ? "bold" : "normal");
+
+    const lineas = doc.splitTextToSize(texto, anchoUtil);
+    for (const linea of lineas) {
+      if (y > altoUtil) {
+        doc.addPage();
+        y = margenY;
+      }
+
+      doc.text(linea, margenX, y);
+      y += interlineado;
+    }
+  }
+
+  doc.save("CV_profesional.pdf");
+}
+
+function normalizarTextoParaPdf(texto) {
+  let limpio = String(texto || "");
+
+  // Normaliza caracteres Unicode compuestos
+  limpio = limpio.normalize("NFKC");
+
+  // Elimina formato Markdown común
+  limpio = limpio
+    .replace(/\*\*/g, "")
+    .replace(/__+/g, "")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^>\s*/gm, "")
+    .replace(/`/g, "");
+
+  // Reemplaza símbolos problemáticos por equivalentes seguros
+  limpio = limpio
+    .replace(/[•·●◦]/g, "-")
+    .replace(/[–—]/g, "-")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[Ø=ÜÞç]/g, " ");
+
+  // Corrige palabras que vienen letra por letra con espacios
+  limpio = limpio.replace(/\b(?:[A-Za-z0-9@./:+_-]\s+){3,}[A-Za-z0-9@./:+_-]\b/g, (match) => {
+    return match.replace(/\s+/g, "");
+  });
+
+  // Quita caracteres no imprimibles fuera de rango latino básico
+  limpio = limpio.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g, " ");
+
+  // Normaliza espacios y saltos
+  limpio = limpio
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((linea) => linea.trimEnd())
+    .join("\n")
+    .trim();
+
+  return limpio;
 }
 
 window.addEventListener("DOMContentLoaded", cargarAPIKeyGuardada);
