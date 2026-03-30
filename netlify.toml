@@ -1,0 +1,8 @@
+[build]
+  command = "echo 'Build complete'"
+  functions = "netlify/functions"
+  publish = "."
+
+[dev]
+  framework = "static"
+  command = "python -m http.server 8000"

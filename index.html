@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CV Builder IA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>Generador de Hojas de Vida con IA</h1>
+
+  <div class="container">
+
+    <div class="form">
+      <input id="nombre" placeholder="Nombre completo">
+      <textarea id="perfil" placeholder="Describe tu perfil"></textarea>
+      <textarea id="experiencia" placeholder="Experiencia"></textarea>
+      <textarea id="educacion" placeholder="Educación"></textarea>
+      <textarea id="habilidades" placeholder="Habilidades"></textarea>
+
+      <button onclick="generarCV()">Generar con IA</button>
+      <button onclick="descargarPDF()">Descargar PDF</button>
+    </div>
+
+    <div class="preview" id="preview">
+      <h2>Tu hoja de vida aparecerá aquí</h2>
+    </div>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="script.js"></script>
+
+</body>
+</html>
