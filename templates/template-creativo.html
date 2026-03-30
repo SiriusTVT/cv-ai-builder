@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plantilla CV Creativa</title>
+  <style>
+    :root {
+      --bg1: #f9eee3;
+      --bg2: #e4f0ff;
+      --card: rgba(255, 255, 255, 0.86);
+      --ink: #16213e;
+      --muted: #334155;
+      --accent: #ef7d57;
+      --accent2: #2b78e4;
+      --line: rgba(22, 33, 62, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      font-family: "Poppins", "Gill Sans", "Trebuchet MS", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 14% 10%, #ffe0c4 0, transparent 40%),
+        radial-gradient(circle at 85% 18%, #cae2ff 0, transparent 40%),
+        linear-gradient(145deg, var(--bg1), var(--bg2));
+    }
+
+    .cv-wrapper {
+      max-width: 980px;
+      margin: 0 auto;
+      background: var(--card);
+      backdrop-filter: blur(6px);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, 0.17);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 26px;
+      background: linear-gradient(110deg, rgba(239, 125, 87, 0.16), rgba(43, 120, 228, 0.2));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .avatar {
+      width: 160px;
+      height: 160px;
+      border-radius: 20px;
+      object-fit: cover;
+      border: 4px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 10px 26px rgba(22, 33, 62, 0.18);
+      background: #f1f5f9;
+    }
+
+    .top h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.1;
+      letter-spacing: 0.4px;
+    }
+
+    .top p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      max-width: 540px;
+      line-height: 1.6;
+    }
+
+    .content {
+      padding: 26px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .content section {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .content h2,
+    .content h3 {
+      margin: 0 0 10px;
+      font-size: 19px;
+      color: #102344;
+    }
+
+    .content p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .content ul {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .content li {
+      margin-bottom: 7px;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(16, 35, 68, 0.08);
+      color: #102344;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 10px;
+      }
+
+      .top {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .avatar {
+        margin: 0 auto;
+      }
+
+      .top h1 {
+        font-size: 28px;
+      }
+
+      .top p {
+        margin-left: auto;
+        margin-right: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <article class="cv-wrapper">
+    <header class="top">
+      <img class="avatar" src="{{IMAGE_URL}}" alt="Retrato profesional">
+      <div>
+        <h1>CV Portfolio</h1>
+        <p>Formato visual con bloques, ideal para perfiles creativos y digitales.</p>
+        <span class="badge">Diseno de alto impacto</span>
+      </div>
+    </header>
+
+    <main class="content">
+      {{CV_CONTENT}}
+    </main>
+  </article>
+</body>
+</html>
