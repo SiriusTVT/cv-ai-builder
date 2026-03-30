@@ -9,12 +9,17 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyA-dYrRfDfwhocfOSSpSC8UR7qfhh4AdC0")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
 
 @app.route('/api/generar-cv', methods=['POST'])
 def generar_cv():
     data = request.json
+    
+    # Obtener la clave API del cliente
+    gemini_api_key = data.get("apiKey", "").strip()
+    
+    if not gemini_api_key:
+        return jsonify({"success": False, "error": "Clave API de Gemini requerida"}), 400
     
     prompt = f"""
     Crea una hoja de vida profesional con esta información:
@@ -30,7 +35,7 @@ def generar_cv():
     
     try:
         response = requests.post(
-            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            f"{GEMINI_URL}?key={gemini_api_key}",
             json={
                 "contents": [{
                     "parts": [{"text": prompt}]
@@ -39,11 +44,12 @@ def generar_cv():
         )
         
         if response.status_code == 200:
-            data = response.json()
-            texto = data['candidates'][0]['content']['parts'][0]['text']
+            response_data = response.json()
+            texto = response_data['candidates'][0]['content']['parts'][0]['text']
             return jsonify({"success": True, "texto": texto})
         else:
-            return jsonify({"success": False, "error": "Error en la API de Gemini"}), 500
+            error_msg = response.json().get("error", {}).get("message", "Error desconocido")
+            return jsonify({"success": False, "error": error_msg}), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

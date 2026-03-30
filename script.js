@@ -1,4 +1,33 @@
+function cargarAPIKeyGuardada() {
+  const apiKey = localStorage.getItem("gemini_api_key");
+  if (apiKey) {
+    document.getElementById("apiStatus").innerHTML = "<p class='api-success'>✅ API Key configurada</p>";
+    document.getElementById("apiKey").value = apiKey.substring(0, 10) + "***";
+  }
+}
+
+function guardarAPIKey() {
+  const apiKey = document.getElementById("apiKey").value.trim();
+  const statusDiv = document.getElementById("apiStatus");
+
+  if (!apiKey) {
+    statusDiv.innerHTML = "<p class='api-error'>❌ Ingresa una clave API válida</p>";
+    return;
+  }
+
+  localStorage.setItem("gemini_api_key", apiKey);
+  statusDiv.innerHTML = "<p class='api-success'>✅ Clave API guardada correctamente</p>";
+  document.getElementById("apiKey").value = apiKey.substring(0, 10) + "***";
+}
+
 async function generarCV() {
+  const apiKey = localStorage.getItem("gemini_api_key");
+  
+  if (!apiKey) {
+    document.getElementById("preview").innerHTML = "<p style='color: red;'>⚠️ Por favor, ingresa tu Google Gemini API Key primero</p>";
+    return;
+  }
+
   const nombre = document.getElementById("nombre").value;
   const perfil = document.getElementById("perfil").value;
   const experiencia = document.getElementById("experiencia").value;
@@ -19,6 +48,7 @@ async function generarCV() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        apiKey,
         nombre,
         perfil,
         experiencia,
@@ -51,3 +81,6 @@ function descargarPDF() {
   doc.text(contenido, 10, 10);
   doc.save("CV.pdf");
 }
+
+// Cargar API Key al iniciar la página
+window.addEventListener("DOMContentLoaded", cargarAPIKeyGuardada);

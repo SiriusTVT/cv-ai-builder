@@ -1,9 +1,8 @@
 import json
 import requests
-import os
 
 def handler(event, context):
-    """Genera un CV usando la API de Gemini"""
+    """Genera un CV usando la API de Gemini con la clave del cliente"""
     
     # Solo aceptar POST
     if event["httpMethod"] != "POST":
@@ -16,11 +15,19 @@ def handler(event, context):
         # Parsear el body
         body = json.loads(event["body"])
         
+        gemini_api_key = body.get("apiKey", "").strip()
         nombre = body.get("nombre", "")
         perfil = body.get("perfil", "")
         experiencia = body.get("experiencia", "")
         educacion = body.get("educacion", "")
         habilidades = body.get("habilidades", "")
+        
+        # Validar que se proporcione la clave API
+        if not gemini_api_key:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"success": False, "error": "Clave API de Gemini requerida"})
+            }
         
         # Crear el prompt
         prompt = f"""
@@ -34,14 +41,6 @@ def handler(event, context):
 
         Mejora la redacción y hazlo profesional.
         """
-        
-        # Obtener la clave API desde variables de entorno
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
-        if not gemini_api_key:
-            return {
-                "statusCode": 500,
-                "body": json.dumps({"success": False, "error": "Clave API no configurada"})
-            }
         
         # Llamar a la API de Gemini
         gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
@@ -66,12 +65,21 @@ def handler(event, context):
                 "body": json.dumps({"success": True, "texto": texto})
             }
         else:
+            error_msg = response.json().get("error", {}).get("message", "Error desconocido")
             return {
-                "statusCode": 500,
-                "body": json.dumps({"success": False, "error": "Error en la API de Gemini"})
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                },
+                "body": json.dumps({"success": False, "error": error_msg})
             }
     except Exception as e:
         return {
             "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
             "body": json.dumps({"success": False, "error": str(e)})
         }

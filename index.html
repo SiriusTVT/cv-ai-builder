@@ -12,6 +12,16 @@
   <div class="container">
 
     <div class="form">
+      <div class="api-config">
+        <h3>🔑 Configuración API</h3>
+        <input id="apiKey" type="password" placeholder="Ingresa tu Google Gemini API Key">
+        <small>¿No tienes clave? <a href="https://aistudio.google.com/app/apikey" target="_blank">Obtén una aquí gratis</a></small>
+        <button onclick="guardarAPIKey()" class="btn-secondary">Guardar Clave</button>
+        <div id="apiStatus"></div>
+      </div>
+
+      <hr>
+
       <input id="nombre" placeholder="Nombre completo">
       <textarea id="perfil" placeholder="Describe tu perfil"></textarea>
       <textarea id="experiencia" placeholder="Experiencia"></textarea>

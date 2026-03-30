@@ -20,4 +20,72 @@ textarea, input {
   width: 100%;
   margin-bottom: 10px;
   padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-family: Arial, sans-serif;
+}
+
+hr {
+  margin: 20px 0;
+  border: none;
+  border-top: 1px solid #ddd;
+}
+
+.api-config {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border-left: 4px solid #007bff;
+}
+
+.api-config h3 {
+  margin-top: 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.api-config small {
+  display: block;
+  margin: 8px 0;
+  color: #666;
+}
+
+.api-config a {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.api-config a:hover {
+  text-decoration: underline;
+}
+
+.btn-secondary {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.btn-secondary:hover {
+  background: #218838;
+}
+
+#apiStatus {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.api-success {
+  color: #28a745;
+}
+
+.api-error {
+  color: #dc3545;
 }
