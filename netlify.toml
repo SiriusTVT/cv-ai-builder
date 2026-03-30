@@ -1,7 +1,9 @@
 [build]
   command = "echo 'Build complete'"
-  functions = "netlify/functions"
   publish = "."
+
+[functions]
+  directory = "netlify/functions"
 
 [dev]
   framework = "static"

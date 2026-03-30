@@ -15,7 +15,7 @@ cv-ai-builder/
 ├── requirements.txt        # Dependencias Python
 └── netlify/
     └── functions/
-        └── generar_cv.py   # Función serverless para Netlify
+      └── generar_cv.js   # Función serverless para Netlify
 ```
 
 ## 🔑 Obtener tu API Key de Gemini
@@ -106,7 +106,7 @@ python -m http.server 8000
 ### Cambiar el prompt de generación
 Edita la variable `prompt` en:
 - `server.py` (línea ~22)
-- `netlify/functions/generar_cv.py` (línea ~32)
+- `netlify/functions/generar_cv.js`
 
 ### Cambiar los estilos
 Edita `style.css`
@@ -130,4 +130,4 @@ Sí, la clave se almacena SOLO en tu navegador. Nunca se envía a nuestros servi
 Google Gemini te notificará y puedes mejorar tu plan si lo deseas.
 
 **¿Puedo cambiar a otra IA?**  
-Sí, solo actualiza el endpoint y el prompt en `server.py` y `netlify/functions/generar_cv.py`
+Sí, solo actualiza el endpoint y el prompt en `server.py` y `netlify/functions/generar_cv.js`
