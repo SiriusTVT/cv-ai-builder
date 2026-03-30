@@ -4,24 +4,27 @@ import requests
 import os
 from dotenv import load_dotenv
 import traceback
+import json
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+# API de Replicate para usar Qwen
+REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
+QWEN_MODEL = "qwen/qwen-72b"
 
 @app.route('/api/generar-cv', methods=['POST'])
 def generar_cv():
     try:
         data = request.json
         
-        # Obtener la clave API del cliente
-        gemini_api_key = data.get("apiKey", "").strip()
+        # Obtener la clave API del cliente (Replicate)
+        replicate_api_key = data.get("apiKey", "").strip()
         
-        if not gemini_api_key:
-            return jsonify({"success": False, "error": "Clave API de Gemini requerida"}), 400
+        if not replicate_api_key:
+            return jsonify({"success": False, "error": "Clave API de Replicate requerida"}), 400
         
         nombre = data.get('nombre', '').strip()
         perfil = data.get('perfil', '').strip()
@@ -33,59 +36,107 @@ def generar_cv():
         if not nombre:
             return jsonify({"success": False, "error": "El nombre es requerido"}), 400
         
-        prompt = f"""
-        Crea una hoja de vida profesional con esta información:
+        prompt = f"""Crea una hoja de vida profesional bien formateada con esta información:
 
-        Nombre: {nombre}
-        Perfil: {perfil}
-        Experiencia: {experiencia}
-        Educación: {educacion}
-        Habilidades: {habilidades}
+Nombre: {nombre}
+Perfil: {perfil}
+Experiencia: {experiencia}
+Educación: {educacion}
+Habilidades: {habilidades}
 
-        Mejora la redacción y hazlo profesional.
-        """
+Por favor:
+1. Mejora la redacción y el formato
+2. Hazlo profesional y atractivo
+3. Organiza la información de forma clara
+4. Usa viñetas donde sea apropiado"""
         
-        print(f"[INFO] Enviando solicitud a Gemini con clave: {gemini_api_key[:20]}...")
+        print(f"[INFO] Usando Qwen via Replicate")
+        print(f"[INFO] Clave: {replicate_api_key[:20]}...")
         
-        # Llamar a la API de Gemini
+        # Llamar a la API de Replicate
+        headers = {
+            "Authorization": f"Token {replicate_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "version": "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1",  # qwen-72b
+            "input": {
+                "prompt": prompt,
+                "max_tokens": 1500,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        }
+        
         response = requests.post(
-            f"{GEMINI_URL}?key={gemini_api_key}",
-            json={
-                "contents": [{
-                    "parts": [{"text": prompt}]
-                }]
-            },
-            timeout=30
+            REPLICATE_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=60
         )
         
-        print(f"[INFO] Respuesta de Gemini - Status: {response.status_code}")
-        print(f"[DEBUG] Respuesta: {response.text[:500]}")
+        print(f"[INFO] Respuesta de Replicate - Status: {response.status_code}")
         
-        if response.status_code == 200:
+        if response.status_code == 201:
             response_data = response.json()
             
-            # Validar que la respuesta tenga el formato esperado
-            if 'candidates' not in response_data or not response_data['candidates']:
-                return jsonify({
-                    "success": False, 
-                    "error": "Respuesta inválida de Gemini (sin contenido)"
-                }), 500
+            # Replicate devuelve un ID de predicción, necesitamos esperar
+            prediction_id = response_data.get("id")
+            print(f"[INFO] Predicción creada: {prediction_id}")
             
-            texto = response_data['candidates'][0]['content']['parts'][0]['text']
-            return jsonify({"success": True, "texto": texto})
+            # Esperar a que se complete
+            import time
+            max_attempts = 30
+            for attempt in range(max_attempts):
+                time.sleep(2)
+                
+                # Obtener el estado
+                check_response = requests.get(
+                    f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                    headers=headers,
+                    timeout=10
+                )
+                
+                if check_response.status_code == 200:
+                    check_data = check_response.json()
+                    
+                    if check_data.get("status") == "succeeded":
+                        output = check_data.get("output", [])
+                        if isinstance(output, list):
+                            texto = "".join(output)
+                        else:
+                            texto = str(output)
+                        
+                        print(f"[INFO] CV generado exitosamente")
+                        return jsonify({"success": True, "texto": texto})
+                    
+                    elif check_data.get("status") == "failed":
+                        error = check_data.get("error", "Error desconocido en Replicate")
+                        print(f"[ERROR] Predicción fallida: {error}")
+                        return jsonify({
+                            "success": False,
+                            "error": f"Error en Replicate: {error}"
+                        }), 400
+            
+            # Timeout
+            return jsonify({
+                "success": False,
+                "error": "Tiempo de espera agotado. Intenta de nuevo."
+            }), 504
+        
         else:
-            # Gemini retornó un error
             try:
                 error_data = response.json()
-                error_msg = error_data.get("error", {}).get("message", "Error desconocido")
+                error_msg = error_data.get("detail", str(error_data))
             except:
-                error_msg = f"Error {response.status_code}: {response.text}"
+                error_msg = f"Error {response.status_code}: {response.text[:200]}"
             
-            print(f"[ERROR] Error de Gemini: {error_msg}")
+            print(f"[ERROR] Error de Replicate: {error_msg}")
             
             return jsonify({
-                "success": False, 
-                "error": f"Error de Gemini: {error_msg}"
+                "success": False,
+                "error": f"Error de Replicate: {error_msg}"
             }), 400
     
     except requests.exceptions.Timeout:
@@ -113,4 +164,5 @@ def health():
 
 if __name__ == '__main__':
     print("🚀 Iniciando servidor Flask en http://127.0.0.1:5000")
+    print("📡 Usando Qwen via Replicate API")
     app.run(debug=True, port=5000)
