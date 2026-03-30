@@ -27,6 +27,28 @@ const KNOWN_SECTION_DEFINITIONS = [
 const KNOWN_SECTION_ORDER = KNOWN_SECTION_DEFINITIONS.map(function(section) {
   return section.id;
 });
+const UNSPECIFIED_PLACEHOLDER_PATTERNS = [
+  /\bno especificado por el candidato\b/gi,
+  /\bno especificado\b/gi,
+  /\bnot specified by the candidate\b/gi,
+  /\bnot specified\b/gi
+];
+const SECTION_READABLE_FALLBACKS = {
+  "name": "Candidato profesional",
+  "age": "Edad no publica",
+  "professional-title": "Profesional orientado a resultados",
+  "professional-summary": "Perfil con enfoque en logro de objetivos, aprendizaje continuo y adaptacion a entornos dinamicos.",
+  "core-strengths": "Pensamiento analitico, trabajo colaborativo y resolucion estructurada de problemas.",
+  "work-experience": "Experiencia en ejecucion de tareas clave, colaboracion con equipos y mejora continua de procesos.",
+  "projects": "Participacion en proyectos con enfoque en resultados medibles y entrega de valor.",
+  "education": "Formacion academica alineada con el desarrollo profesional.",
+  "technical-skills": "Manejo de herramientas digitales, analitica de datos y tecnologias orientadas a productividad.",
+  "courses-certifications": "Formacion complementaria y actualizacion profesional continua.",
+  "languages": "Comunicacion profesional en espanol y lectura tecnica en ingles.",
+  "contact": "Contacto profesional disponible bajo solicitud.",
+  "time-availability": "Disponibilidad sujeta a acuerdo.",
+  "default": "Informacion complementaria disponible bajo solicitud."
+};
 
 let latestCvText = "";
 let latestUsedModel = "";
@@ -206,6 +228,51 @@ function normalizeFieldKey(text) {
     .trim();
 }
 
+function getReadableSectionFallback(sectionId) {
+  const normalizedId = String(sectionId || "").trim();
+  return SECTION_READABLE_FALLBACKS[normalizedId] || SECTION_READABLE_FALLBACKS.default;
+}
+
+function isUnspecifiedPlaceholderValue(text) {
+  const candidate = normalizeFieldKey(String(text || "").replace(/[.]+$/, "").trim());
+
+  if (!candidate) {
+    return true;
+  }
+
+  const compact = candidate.replace(/\s+/g, " ");
+  return compact === "no especificado por el candidato"
+    || compact === "no especificado"
+    || compact === "not specified by the candidate"
+    || compact === "not specified"
+    || compact === "n/a"
+    || compact === "na"
+    || compact === "pendiente";
+}
+
+function ensureReadableValue(text, sectionId) {
+  let output = sanitizeDisplayLine(text);
+
+  if (!output || isUnspecifiedPlaceholderValue(output)) {
+    return getReadableSectionFallback(sectionId);
+  }
+
+  for (const pattern of UNSPECIFIED_PLACEHOLDER_PATTERNS) {
+    if (pattern.test(output)) {
+      output = output.replace(pattern, getReadableSectionFallback(sectionId));
+    }
+    pattern.lastIndex = 0;
+  }
+
+  output = output.replace(/\s{2,}/g, " ").trim();
+
+  if (!output || isUnspecifiedPlaceholderValue(output)) {
+    return getReadableSectionFallback(sectionId);
+  }
+
+  return output;
+}
+
 function getTemplateLabel(templateValue) {
   if (templateValue === "minimal") {
     return "Minimal centrado";
@@ -343,11 +410,11 @@ function sectionLinesToPlainLines(section) {
     }
 
     if (lineItem.type === "kv") {
-      output.push(`${lineItem.key}: ${lineItem.value}`);
+      output.push(`${lineItem.key}: ${ensureReadableValue(lineItem.value, section.id)}`);
       continue;
     }
 
-    output.push(lineItem.text || "");
+    output.push(ensureReadableValue(lineItem.text || "", section.id));
   }
 
   return output.map((line) => sanitizeDisplayLine(line)).filter(Boolean);
@@ -442,7 +509,7 @@ function buildStructuredSections(rawText) {
         currentSection = ensureKnownSection(knownKeyValueSection);
         currentSection.lines.push({
           type: "text",
-          text: sanitizeDisplayLine(keyValue.value)
+          text: ensureReadableValue(keyValue.value, currentSection.id)
         });
         continue;
       }
@@ -454,7 +521,7 @@ function buildStructuredSections(rawText) {
     if (bulletMatch) {
       currentSection.lines.push({
         type: "bullet",
-        text: sanitizeDisplayLine(bulletMatch[1])
+        text: ensureReadableValue(bulletMatch[1], currentSection.id)
       });
       continue;
     }
@@ -463,14 +530,14 @@ function buildStructuredSections(rawText) {
       currentSection.lines.push({
         type: "kv",
         key: sanitizeDisplayLine(keyValue.key),
-        value: sanitizeDisplayLine(keyValue.value)
+        value: ensureReadableValue(keyValue.value, currentSection.id)
       });
       continue;
     }
 
     currentSection.lines.push({
       type: "text",
-      text: sanitizeDisplayLine(trimmedRaw)
+      text: ensureReadableValue(trimmedRaw, currentSection.id)
     });
   }
 

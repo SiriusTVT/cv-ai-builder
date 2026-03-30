@@ -48,7 +48,7 @@ REGLAS DE DETALLE:
 - Technical skills: agrupa por categorias (Programming, Data/BI, Databases, DevOps/Cloud, Tools).
 - Courses and certifications / Languages / Contact / Time availability: no las omitas.
 - Longitud objetivo: minimo 55 lineas utiles y salida extensa cuando haya datos suficientes.
-- Si falta un dato, escribe "No especificado por el candidato".
+- Si falta un dato, usa una frase profesional breve y util (sin usar "No especificado por el candidato").
 
 TEXTO DEL USUARIO:
 <<<
