@@ -1,9 +1,10 @@
 function getSavedApiKey() {
-  return localStorage.getItem("replicate_api_key") || localStorage.getItem("gemini_api_key") || "";
+  return localStorage.getItem("hf_api_key") || "";
 }
 
 function setSavedApiKey(apiKey) {
-  localStorage.setItem("replicate_api_key", apiKey);
+  localStorage.setItem("hf_api_key", apiKey);
+  localStorage.removeItem("replicate_api_key");
   localStorage.removeItem("gemini_api_key");
 }
 
@@ -54,6 +55,11 @@ function guardarAPIKey() {
     return;
   }
 
+  if (!apiKey.includes("*") && !apiKey.startsWith("hf_")) {
+    statusDiv.innerHTML = "<p class='api-error'>El token debe iniciar con hf_</p>";
+    return;
+  }
+
   if (apiKey.includes("*") && savedApiKey) {
     statusDiv.innerHTML = "<p class='api-success'>API Key ya configurada</p>";
     return;
@@ -70,7 +76,7 @@ async function generarCV() {
   const preview = document.getElementById("preview");
 
   if (!apiKey) {
-    preview.innerHTML = "<p style='color: red;'>Primero guarda tu Replicate API Key.</p>";
+    preview.innerHTML = "<p style='color: red;'>Primero guarda tu token de Hugging Face.</p>";
     return;
   }
 

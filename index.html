@@ -14,8 +14,8 @@
     <div class="form">
       <div class="api-config">
         <h3>🔑 Configuración API</h3>
-        <input id="apiKey" type="password" placeholder="Ingresa tu Replicate API Key">
-        <small>¿No tienes clave? <a href="https://replicate.com/account/api-tokens" target="_blank">Obtén una aquí (gratis)</a></small>
+        <input id="apiKey" type="password" placeholder="Ingresa tu token de Hugging Face (hf_...)">
+        <small>¿No tienes token? <a href="https://huggingface.co/settings/tokens/new?ownUserPermissions=inference.serverless.write&tokenType=fineGrained" target="_blank">Créalo aquí (incluye créditos mensuales gratis)</a></small>
         <button onclick="guardarAPIKey()" class="btn-secondary">Guardar Clave</button>
         <div id="apiStatus"></div>
       </div>

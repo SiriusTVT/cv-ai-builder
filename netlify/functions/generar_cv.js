@@ -1,5 +1,5 @@
-const REPLICATE_API_URL = "https://api.replicate.com/v1/predictions";
-const QWEN_MODEL = "qwen/qwen3-235b-a22b-instruct-2507";
+const HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
+const HF_MODEL = "Qwen/Qwen2.5-7B-Instruct-1M:cheapest";
 
 function construirPrompt(inputLibre) {
   return `Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
@@ -9,23 +9,19 @@ Tu tarea es analizar, organizar y transformar informacion desordenada en una hoj
 INSTRUCCIONES:
 
 1. Analiza el texto proporcionado por el usuario (puede estar desordenado, incompleto o mal redactado).
-
 2. Extrae y organiza la informacion en estas secciones:
    - Nombre
    - Perfil profesional
    - Experiencia
    - Educacion
    - Habilidades
-
 3. Si alguna seccion no esta clara:
    - infierela inteligentemente sin inventar informacion falsa
    - completa con redaccion profesional
-
 4. Mejora completamente la redaccion:
    - usa lenguaje claro, profesional y persuasivo
    - convierte descripciones simples en contenido profesional
    - usa verbos de accion
-
 5. Optimiza para sistemas ATS:
    - estructura clara
    - palabras clave relevantes
@@ -60,13 +56,13 @@ function makeResponse(statusCode, payload) {
   };
 }
 
-function parseReplicateError(responseData, statusCode, fallbackText) {
-  if (responseData && typeof responseData.detail === "string" && responseData.detail) {
-    return responseData.detail;
-  }
-
+function parseHfError(responseData, statusCode, fallbackText) {
   if (responseData && typeof responseData.error === "string" && responseData.error) {
     return responseData.error;
+  }
+
+  if (responseData && typeof responseData.message === "string" && responseData.message) {
+    return responseData.message;
   }
 
   if (responseData && typeof responseData === "object") {
@@ -74,10 +70,6 @@ function parseReplicateError(responseData, statusCode, fallbackText) {
   }
 
   return `Error ${statusCode}: ${String(fallbackText || "Error desconocido").slice(0, 200)}`;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 exports.handler = async function handler(event) {
@@ -91,11 +83,11 @@ exports.handler = async function handler(event) {
 
   try {
     const body = JSON.parse(event.body || "{}");
-    const replicateApiKey = String(body.apiKey || "").trim();
+    const hfApiKey = String(body.apiKey || "").trim();
     const inputLibre = String(body.inputLibre || "").trim();
 
-    if (!replicateApiKey) {
-      return makeResponse(400, { success: false, error: "Clave API de Replicate requerida" });
+    if (!hfApiKey) {
+      return makeResponse(400, { success: false, error: "Token de Hugging Face requerido" });
     }
 
     if (!inputLibre) {
@@ -103,88 +95,54 @@ exports.handler = async function handler(event) {
     }
 
     const headers = {
-      Authorization: `Bearer ${replicateApiKey}`,
+      Authorization: `Bearer ${hfApiKey}`,
       "Content-Type": "application/json"
     };
 
     const payload = {
-      version: QWEN_MODEL,
-      input: {
-        prompt: construirPrompt(inputLibre),
-        max_tokens: 1500,
-        temperature: 0.7,
-        top_p: 0.9
-      }
+      model: HF_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "Eres un experto en CVs y optimizacion ATS. Responde en espanol claro y profesional."
+        },
+        {
+          role: "user",
+          content: construirPrompt(inputLibre)
+        }
+      ],
+      temperature: 0.4,
+      max_tokens: 700,
+      stream: false
     };
 
-    const createResponse = await fetch(REPLICATE_API_URL, {
+    const response = await fetch(HF_CHAT_URL, {
       method: "POST",
       headers,
       body: JSON.stringify(payload)
     });
 
-    const createText = await createResponse.text();
-    let createData = null;
+    const responseText = await response.text();
+    let data = null;
     try {
-      createData = JSON.parse(createText);
+      data = JSON.parse(responseText);
     } catch (err) {
-      createData = null;
+      data = null;
     }
 
-    if (createResponse.status !== 201) {
-      const errorMsg = parseReplicateError(createData, createResponse.status, createText);
-      return makeResponse(400, { success: false, error: `Error en Replicate: ${errorMsg}` });
+    if (!response.ok) {
+      const errorMsg = parseHfError(data, response.status, responseText);
+      return makeResponse(400, { success: false, error: `Error en Hugging Face: ${errorMsg}` });
     }
 
-    const predictionId = createData && createData.id;
-    if (!predictionId) {
-      return makeResponse(500, { success: false, error: "Replicate no devolvio id de prediccion" });
+    const texto = data?.choices?.[0]?.message?.content;
+    if (!texto || typeof texto !== "string") {
+      return makeResponse(500, { success: false, error: "Respuesta invalida de Hugging Face" });
     }
 
-    for (let i = 0; i < 25; i += 1) {
-      await sleep(2000);
-
-      const statusResponse = await fetch(`${REPLICATE_API_URL}/${predictionId}`, {
-        method: "GET",
-        headers
-      });
-
-      if (statusResponse.status !== 200) {
-        continue;
-      }
-
-      const statusText = await statusResponse.text();
-      let statusData = null;
-      try {
-        statusData = JSON.parse(statusText);
-      } catch (err) {
-        statusData = null;
-      }
-
-      if (!statusData) {
-        continue;
-      }
-
-      if (statusData.status === "succeeded") {
-        const output = statusData.output;
-        const texto = Array.isArray(output) ? output.join("") : String(output || "");
-        return makeResponse(200, {
-          success: true,
-          texto: texto.trim() || "No se recibio contenido de la IA. Intenta de nuevo."
-        });
-      }
-
-      if (statusData.status === "failed" || statusData.status === "canceled") {
-        return makeResponse(400, {
-          success: false,
-          error: `Error en Replicate: ${statusData.error || "La prediccion fallo"}`
-        });
-      }
-    }
-
-    return makeResponse(504, {
-      success: false,
-      error: "Tiempo de espera agotado. Intenta de nuevo."
+    return makeResponse(200, {
+      success: true,
+      texto: texto.trim()
     });
   } catch (error) {
     return makeResponse(500, {

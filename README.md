@@ -1,6 +1,6 @@
 # CV Builder IA 🚀
 
-Generador de hojas de vida con inteligencia artificial usando Gemini.
+Generador de hojas de vida con inteligencia artificial usando Hugging Face Inference Providers.
 
 ## 📁 Estructura del proyecto
 
@@ -18,14 +18,16 @@ cv-ai-builder/
       └── generar_cv.js   # Función serverless para Netlify
 ```
 
-## 🔑 Obtener tu API Key de Gemini
+## 🔑 Obtener tu token de Hugging Face
 
-La aplicación requiere una **API Key personal de Google Gemini**. Es gratis y toma 1 minuto obtenerla:
+La aplicación requiere un **token personal de Hugging Face** con permiso de Inference Providers.
 
-1. Ve a [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Haz clic en "Create API Key"
-3. Selecciona "Create API key in new project"
-4. ¡Copia tu clave! 🎉
+1. Ve a [Hugging Face Tokens](https://huggingface.co/settings/tokens/new?ownUserPermissions=inference.serverless.write&tokenType=fineGrained)
+2. Crea un token tipo **fine-grained**
+3. Activa permiso **Make calls to Inference Providers**
+4. Copia tu token `hf_...`
+
+Hugging Face incluye créditos gratuitos mensuales para usuarios free.
 
 ## 🚀 Usar localmente
 
@@ -50,7 +52,7 @@ python -m http.server 8000
 
 ### 4. Usar la aplicación
 - Abre [http://localhost:8000](http://localhost:8000)
-- Pega tu API Key de Gemini en el campo "Configuración API"
+- Pega tu token `hf_...` en el campo "Configuración API"
 - Haz clic en "Guardar Clave"
 - ¡Llena el formulario y genera tu CV! 📄
 
@@ -90,9 +92,9 @@ python -m http.server 8000
 ## 🔒 Seguridad
 
 - ✅ La API Key **no se envía al servidor** durante el deploy
-- ✅ Cada usuario usa su propia clave de Gemini
+- ✅ Cada usuario usa su propio token de Hugging Face
 - ✅ Se almacena únicamente en localStorage del navegador (seguro)
-- ✅ Perfectamente compatible con planes free de Gemini
+- ✅ Compatible con créditos gratuitos mensuales de Hugging Face
 
 ## 📦 Dependencias
 
@@ -121,13 +123,13 @@ MIT
 ## ❓ Preguntas frecuentes
 
 **¿Es gratis?**  
-Sí, completamente. Google Gemini tiene un plan gratuito con límite de requests.
+Sí. Hugging Face ofrece créditos gratuitos mensuales para comenzar.
 
 **¿Es seguro compartir mi API Key?**  
 Sí, la clave se almacena SOLO en tu navegador. Nunca se envía a nuestros servidores.
 
 **¿Qué pasa si se acaba mi cuota?**  
-Google Gemini te notificará y puedes mejorar tu plan si lo deseas.
+Hugging Face te pedirá comprar créditos adicionales para seguir usando la API.
 
 **¿Puedo cambiar a otra IA?**  
 Sí, solo actualiza el endpoint y el prompt en `server.py` y `netlify/functions/generar_cv.js`

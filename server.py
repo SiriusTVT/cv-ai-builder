@@ -1,14 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import traceback
-import time
 
 app = Flask(__name__)
 CORS(app)
 
-REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
-QWEN_MODEL = "qwen/qwen3-235b-a22b-instruct-2507"
+HF_CHAT_URL = "https://router.huggingface.co/v1/chat/completions"
+HF_MODEL = "Qwen/Qwen2.5-7B-Instruct-1M:cheapest"
 
 
 def construir_prompt(input_libre):
@@ -19,32 +17,28 @@ Tu tarea es analizar, organizar y transformar informacion desordenada en una hoj
 INSTRUCCIONES:
 
 1. Analiza el texto proporcionado por el usuario (puede estar desordenado, incompleto o mal redactado).
-
 2. Extrae y organiza la informacion en estas secciones:
    - Nombre
    - Perfil profesional
    - Experiencia
    - Educacion
    - Habilidades
-
 3. Si alguna seccion no esta clara:
    - infierela inteligentemente sin inventar informacion falsa
    - completa con redaccion profesional
-
 4. Mejora completamente la redaccion:
    - usa lenguaje claro, profesional y persuasivo
    - convierte descripciones simples en contenido profesional
    - usa verbos de accion
-
 5. Optimiza para sistemas ATS:
    - estructura clara
    - palabras clave relevantes
    - formato profesional
 
 TEXTO DEL USUARIO:
-\"\"\"
+<<<
 {input_libre}
-\"\"\"
+>>>
 
 SALIDA:
 Genera una hoja de vida estructurada con:
@@ -57,13 +51,14 @@ Genera una hoja de vida estructurada con:
 Formato limpio, claro y listo para enviar."""
 
 
-def parse_replicate_error(response):
+def parse_hf_error(response):
     try:
         error_data = response.json()
-        detail = error_data.get("detail")
-        if isinstance(detail, str) and detail:
-            return detail
         if isinstance(error_data, dict):
+            if isinstance(error_data.get("error"), str) and error_data.get("error"):
+                return error_data.get("error")
+            if isinstance(error_data.get("message"), str) and error_data.get("message"):
+                return error_data.get("message")
             return str(error_data)
     except Exception:
         pass
@@ -76,86 +71,61 @@ def generar_cv():
     try:
         data = request.get_json(silent=True) or {}
 
-        replicate_api_key = str(data.get("apiKey", "")).strip()
+        hf_api_key = str(data.get("apiKey", "")).strip()
         input_libre = str(data.get("inputLibre", "")).strip()
 
-        if not replicate_api_key:
-            return jsonify({"success": False, "error": "Clave API de Replicate requerida"}), 400
+        if not hf_api_key:
+            return jsonify({"success": False, "error": "Token de Hugging Face requerido"}), 400
 
         if not input_libre:
             return jsonify({"success": False, "error": "Debes ingresar informacion en el cuadro de texto"}), 400
 
-        prompt = construir_prompt(input_libre)
-
         headers = {
-            "Authorization": f"Bearer {replicate_api_key}",
+            "Authorization": f"Bearer {hf_api_key}",
             "Content-Type": "application/json",
         }
 
         payload = {
-            "version": QWEN_MODEL,
-            "input": {
-                "prompt": prompt,
-                "max_tokens": 1500,
-                "temperature": 0.7,
-                "top_p": 0.9,
-            },
+            "model": HF_MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Eres un experto en CVs y optimizacion ATS. Responde en espanol claro y profesional.",
+                },
+                {
+                    "role": "user",
+                    "content": construir_prompt(input_libre),
+                },
+            ],
+            "temperature": 0.4,
+            "max_tokens": 700,
+            "stream": False,
         }
 
-        create_response = requests.post(
-            REPLICATE_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=30,
-        )
+        response = requests.post(HF_CHAT_URL, headers=headers, json=payload, timeout=60)
 
-        if create_response.status_code != 201:
-            error_msg = parse_replicate_error(create_response)
-            return jsonify({"success": False, "error": f"Error en Replicate: {error_msg}"}), 400
+        if response.status_code != 200:
+            error_msg = parse_hf_error(response)
+            return jsonify({"success": False, "error": f"Error en Hugging Face: {error_msg}"}), 400
 
-        prediction_id = create_response.json().get("id")
-        if not prediction_id:
-            return jsonify({"success": False, "error": "Replicate no devolvio id de prediccion"}), 500
+        response_data = response.json()
+        choices = response_data.get("choices") if isinstance(response_data, dict) else None
+        if not choices:
+            return jsonify({"success": False, "error": "Respuesta invalida de Hugging Face"}), 500
 
-        for _ in range(30):
-            time.sleep(2)
+        message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+        texto = str(message.get("content", "")).strip()
 
-            status_response = requests.get(
-                f"{REPLICATE_API_URL}/{prediction_id}",
-                headers=headers,
-                timeout=10,
-            )
+        if not texto:
+            return jsonify({"success": False, "error": "No se recibio contenido de la IA"}), 500
 
-            if status_response.status_code != 200:
-                continue
-
-            status_data = status_response.json()
-            status = status_data.get("status")
-
-            if status == "succeeded":
-                output = status_data.get("output", "")
-                if isinstance(output, list):
-                    texto = "".join(output)
-                else:
-                    texto = str(output)
-
-                if not texto.strip():
-                    texto = "No se recibio contenido de la IA. Intenta de nuevo."
-
-                return jsonify({"success": True, "texto": texto})
-
-            if status in {"failed", "canceled"}:
-                error_msg = status_data.get("error", "La prediccion fallo")
-                return jsonify({"success": False, "error": f"Error en Replicate: {error_msg}"}), 400
-
-        return jsonify({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}), 504
+        return jsonify({"success": True, "texto": texto})
 
     except requests.exceptions.Timeout:
         return jsonify({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}), 504
     except requests.exceptions.RequestException as exc:
         return jsonify({"success": False, "error": f"Error de conexion: {str(exc)}"}), 500
     except Exception as exc:
-        print(traceback.format_exc())
         return jsonify({"success": False, "error": f"Error inesperado: {str(exc)}"}), 500
 
 
