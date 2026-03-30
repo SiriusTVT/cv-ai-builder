@@ -558,8 +558,222 @@ function buildStructuredSections(rawText) {
   return orderedSections;
 }
 
+function sectionHasRealContent(section) {
+  if (!section || !Array.isArray(section.lines)) {
+    return false;
+  }
+
+  return section.lines.some((lineItem) => {
+    if (!lineItem) {
+      return false;
+    }
+
+    if (lineItem.type === "kv") {
+      return Boolean(sanitizeDisplayLine(lineItem.value));
+    }
+
+    return Boolean(sanitizeDisplayLine(lineItem.text));
+  });
+}
+
+function hasAnyKeyword(text, keywords) {
+  const normalized = normalizeFieldKey(text);
+  return keywords.some((keyword) => normalized.includes(normalizeFieldKey(keyword)));
+}
+
+function inferProfileContextFromSections(sections) {
+  const sectionMap = new Map((sections || []).map((section) => [section.id, section]));
+
+  const name = sectionLinesToPlainLines(sectionMap.get("name"))[0] || "";
+  const age = sectionLinesToPlainLines(sectionMap.get("age"))[0] || "";
+  const title = sectionLinesToPlainLines(sectionMap.get("professional-title"))[0] || "";
+  const summary = sectionLinesToPlainLines(sectionMap.get("professional-summary")).slice(0, 3).join(" ") || "";
+
+  const allLines = (sections || []).flatMap((section) => sectionLinesToPlainLines(section));
+  const allText = allLines.join(" ");
+  const normalizedText = normalizeFieldKey(allText);
+
+  let location = "";
+  const locationMatch = normalizedText.match(/\b(cali|bogota|medellin|colombia|mexico|peru|chile|argentina|ecuador|espana)\b/);
+  if (locationMatch) {
+    location = locationMatch[1].charAt(0).toUpperCase() + locationMatch[1].slice(1);
+  }
+
+  let availability = "Disponibilidad sujeta a acuerdo.";
+  if (hasAnyKeyword(normalizedText, ["tiempo completo", "full time", "full-time", "jornada completa"])) {
+    availability = "Disponible para jornada completa";
+  } else if (hasAnyKeyword(normalizedText, ["medio tiempo", "part time", "part-time"])) {
+    availability = "Disponible para jornada parcial";
+  }
+
+  if (hasAnyKeyword(normalizedText, ["remoto", "remote", "hibrido", "hybrid"])) {
+    availability += " y modalidades remotas/hibridas";
+  }
+
+  let languageLine = "Comunicacion profesional en espanol y lectura tecnica en ingles.";
+  if (hasAnyKeyword(normalizedText, ["ingles", "english", "bilingue", "bilingual"])) {
+    languageLine = "Nivel de ingles funcional para comunicacion profesional y documentacion tecnica.";
+  }
+
+  const skillCatalog = [
+    { label: "Python y analitica de datos (Pandas, NumPy)", keywords: ["python", "pandas", "numpy", "analisis de datos", "data"] },
+    { label: "SQL y modelado de datos", keywords: ["sql", "modelado", "mysql", "postgres"] },
+    { label: "Visualizacion y BI (Power BI, Excel)", keywords: ["power bi", "excel", "bi"] },
+    { label: "Desarrollo web full-stack (React, Node.js)", keywords: ["react", "node", "node.js", "full-stack", "frontend", "backend"] },
+    { label: "APIs REST e integraciones", keywords: ["api", "rest", "integracion"] },
+    { label: "Bases de datos relacionales y NoSQL", keywords: ["mongodb", "firebase", "postgres", "mysql", "nosql"] },
+    { label: "Herramientas DevOps (Docker, Git, CI/CD)", keywords: ["docker", "git", "ci/cd", "devops"] }
+  ];
+
+  const detectedSkills = skillCatalog
+    .filter((item) => item.keywords.some((keyword) => normalizedText.includes(normalizeFieldKey(keyword))))
+    .map((item) => item.label);
+
+  return {
+    name,
+    age,
+    title,
+    summary,
+    location,
+    availability,
+    languageLine,
+    skillBullets: detectedSkills
+  };
+}
+
+function buildSectionFallbackLines(sectionId, context) {
+  const ctx = context || {};
+
+  if (sectionId === "name") {
+    return [{ type: "text", text: ctx.name || "Candidato profesional" }];
+  }
+
+  if (sectionId === "age") {
+    return [{ type: "text", text: ctx.age || "Edad no publica" }];
+  }
+
+  if (sectionId === "professional-title") {
+    return [{ type: "text", text: ctx.title || "Profesional en desarrollo con enfoque en resultados" }];
+  }
+
+  if (sectionId === "professional-summary") {
+    return [{
+      type: "text",
+      text: ctx.summary || "Perfil analitico, orientado a objetivos y mejora continua, con capacidad de adaptacion en entornos dinamicos."
+    }];
+  }
+
+  if (sectionId === "core-strengths") {
+    return [
+      { type: "bullet", text: "Pensamiento analitico y resolucion estructurada de problemas." },
+      { type: "bullet", text: "Comunicacion efectiva y colaboracion con equipos multidisciplinarios." },
+      { type: "bullet", text: "Adaptacion rapida a nuevas herramientas, procesos y retos." }
+    ];
+  }
+
+  if (sectionId === "work-experience") {
+    return [
+      { type: "bullet", text: "Participacion en actividades operativas y tecnicas con enfoque en cumplimiento de objetivos." },
+      { type: "bullet", text: "Apoyo en mejoras de proceso, calidad de entrega y seguimiento de tareas." },
+      { type: "bullet", text: "Trabajo colaborativo con diferentes areas para resolver requerimientos del negocio." }
+    ];
+  }
+
+  if (sectionId === "projects") {
+    return [
+      { type: "bullet", text: "Proyecto orientado a automatizacion y eficiencia de procesos internos." },
+      { type: "bullet", text: "Proyecto de analitica y visualizacion para soporte a decisiones." }
+    ];
+  }
+
+  if (sectionId === "education") {
+    return [
+      { type: "text", text: "Formacion academica alineada con el desarrollo profesional del candidato." }
+    ];
+  }
+
+  if (sectionId === "technical-skills") {
+    const skillBullets = (ctx.skillBullets && ctx.skillBullets.length)
+      ? ctx.skillBullets
+      : [
+        "Analitica de datos y visualizacion.",
+        "Desarrollo de soluciones web y APIs.",
+        "Gestion de bases de datos y herramientas de productividad."
+      ];
+
+    return skillBullets.map((item) => ({ type: "bullet", text: item }));
+  }
+
+  if (sectionId === "courses-certifications") {
+    return [
+      { type: "text", text: "Formacion complementaria en herramientas tecnicas y buenas practicas profesionales." }
+    ];
+  }
+
+  if (sectionId === "languages") {
+    return [{ type: "text", text: ctx.languageLine || "Comunicacion profesional en espanol e ingles tecnico." }];
+  }
+
+  if (sectionId === "contact") {
+    const locationLine = ctx.location
+      ? `Ubicacion de referencia: ${ctx.location}.`
+      : "Ubicacion de referencia disponible bajo solicitud.";
+
+    return [
+      { type: "text", text: locationLine },
+      { type: "text", text: "Canales de contacto profesional disponibles para procesos de seleccion." }
+    ];
+  }
+
+  if (sectionId === "time-availability") {
+    return [{ type: "text", text: ctx.availability || "Disponibilidad sujeta a acuerdo." }];
+  }
+
+  return [{ type: "text", text: getReadableSectionFallback(sectionId) }];
+}
+
+function buildCompleteSections(rawText) {
+  const parsedSections = buildStructuredSections(rawText);
+  const knownSectionMap = new Map();
+  const extraSections = [];
+
+  for (const section of parsedSections) {
+    if (KNOWN_SECTION_ORDER.includes(section.id)) {
+      knownSectionMap.set(section.id, section);
+    } else {
+      extraSections.push(section);
+    }
+  }
+
+  const context = inferProfileContextFromSections(parsedSections);
+  const completedSections = [];
+
+  for (const sectionDef of KNOWN_SECTION_DEFINITIONS) {
+    const existingSection = knownSectionMap.get(sectionDef.id);
+
+    if (sectionHasRealContent(existingSection)) {
+      completedSections.push(existingSection);
+      continue;
+    }
+
+    completedSections.push({
+      id: sectionDef.id,
+      title: sectionDef.title,
+      lines: buildSectionFallbackLines(sectionDef.id, context)
+    });
+  }
+
+  for (const section of extraSections) {
+    if (sectionHasRealContent(section)) {
+      completedSections.push(section);
+    }
+  }
+
+  return completedSections;
+}
+
 function getProfileData(rawText) {
-  const structuredSections = buildStructuredSections(rawText);
+  const structuredSections = buildCompleteSections(rawText);
   const sectionMap = new Map(structuredSections.map((section) => [section.id, section]));
 
   const nameSection = sectionMap.get("name");
@@ -599,7 +813,7 @@ function getProfileData(rawText) {
 }
 
 function formatCvContentToHtml(rawText) {
-  const sections = buildStructuredSections(rawText);
+  const sections = buildCompleteSections(rawText);
 
   if (!sections.length) {
     return "<section><h3>Informacion profesional</h3><p>No hay contenido para mostrar aun.</p></section>";
