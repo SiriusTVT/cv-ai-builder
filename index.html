@@ -25,8 +25,9 @@
       <textarea id="inputLibre" class="raw-input" placeholder="Pega aquí toda tu información (nombre, experiencia, estudios, habilidades, logros, etc.). La IA la organizará automáticamente en un CV profesional."></textarea>
       <small class="helper-text">Ejemplo: "Soy Ana, desarrolladora frontend con 3 años de experiencia en React..."</small>
 
-      <input id="imageUrl" type="url" placeholder="URL de foto profesional (opcional)">
-      <small class="helper-text">Opcional: pega una URL de imagen para mostrarla en la plantilla seleccionada.</small>
+      <input id="imageFile" type="file" accept="image/*">
+      <small class="helper-text">Opcional: selecciona una foto desde tu equipo para mostrarla en la plantilla.</small>
+      <small id="imageStatus" class="helper-text"></small>
 
       <div class="model-config">
         <label for="modeloSalida">Modelo de IA</label>

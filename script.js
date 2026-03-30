@@ -12,6 +12,7 @@ const TEMPLATE_OPTIONS = ["corporativo", "minimal", "creativo"];
 
 let latestCvText = "";
 let latestUsedModel = "";
+let selectedImageDataUrl = "";
 
 function getSavedApiKey() {
   return localStorage.getItem("hf_api_key") || "";
@@ -159,30 +160,82 @@ function getTemplateLabel(templateValue) {
   return "Corporativo (sidebar)";
 }
 
-function getImageInputValue() {
-  const input = document.getElementById("imageUrl");
-  return input ? input.value.trim() : "";
+function setImageStatus(message, isError) {
+  const statusEl = document.getElementById("imageStatus");
+
+  if (!statusEl) {
+    return;
+  }
+
+  statusEl.textContent = message || "";
+  statusEl.classList.remove("api-error", "api-success");
+
+  if (!message) {
+    return;
+  }
+
+  statusEl.classList.add(isError ? "api-error" : "api-success");
 }
 
-function sanitizeImageUrl(value) {
-  const candidate = String(value || "").trim();
+function getSelectedImageSource() {
+  return selectedImageDataUrl || FALLBACK_AVATAR;
+}
 
-  if (!candidate) {
-    return FALLBACK_AVATAR;
-  }
+function handleImageFileSelection(event) {
+  const fileInput = event && event.target ? event.target : null;
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
 
-  try {
-    const parsed = new URL(candidate, window.location.origin);
-    const protocol = parsed.protocol.toLowerCase();
+  if (!file) {
+    selectedImageDataUrl = "";
+    setImageStatus("", false);
 
-    if (protocol === "http:" || protocol === "https:" || protocol === "data:") {
-      return parsed.href;
+    if (latestCvText) {
+      renderPreviewWithTemplate();
     }
-  } catch (error) {
-    return FALLBACK_AVATAR;
+
+    return;
   }
 
-  return FALLBACK_AVATAR;
+  if (!file.type || !file.type.startsWith("image/")) {
+    selectedImageDataUrl = "";
+    if (fileInput) {
+      fileInput.value = "";
+    }
+
+    setImageStatus("Selecciona un archivo de imagen valido (JPG, PNG, WEBP, etc.).", true);
+
+    if (latestCvText) {
+      renderPreviewWithTemplate();
+    }
+
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(loadEvent) {
+    const result = loadEvent && loadEvent.target ? loadEvent.target.result : "";
+    selectedImageDataUrl = typeof result === "string" ? result : "";
+    setImageStatus(`Foto cargada: ${file.name}`, false);
+
+    if (latestCvText) {
+      renderPreviewWithTemplate();
+    }
+  };
+
+  reader.onerror = function() {
+    selectedImageDataUrl = "";
+    setImageStatus("No se pudo leer la imagen seleccionada.", true);
+
+    if (fileInput) {
+      fileInput.value = "";
+    }
+
+    if (latestCvText) {
+      renderPreviewWithTemplate();
+    }
+  };
+
+  reader.readAsDataURL(file);
 }
 
 function getNonEmptyLines(text) {
@@ -285,7 +338,7 @@ function formatCvContentToHtml(rawText) {
 
 function buildTemplateMarkup(rawText, modelUsed) {
   const selectedTemplate = getSelectedTemplate();
-  const imageUrl = sanitizeImageUrl(getImageInputValue());
+  const imageUrl = getSelectedImageSource();
   const profile = getProfileData(rawText);
   const contentHtml = formatCvContentToHtml(rawText);
   const modelBadge = modelUsed
@@ -602,12 +655,8 @@ window.addEventListener("DOMContentLoaded", function() {
     });
   }
 
-  const imageInput = document.getElementById("imageUrl");
+  const imageInput = document.getElementById("imageFile");
   if (imageInput) {
-    imageInput.addEventListener("input", function() {
-      if (latestCvText) {
-        renderPreviewWithTemplate();
-      }
-    });
+    imageInput.addEventListener("change", handleImageFileSelection);
   }
 });
