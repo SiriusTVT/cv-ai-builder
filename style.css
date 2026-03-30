@@ -42,6 +42,36 @@ textarea, input, select {
   font-size: 13px;
 }
 
+.detected-data-panel {
+  margin: 0 0 14px;
+  border: 1px solid #d7dbe4;
+  border-radius: 8px;
+  background: #f8fafd;
+  overflow: hidden;
+}
+
+.detected-data-panel summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f2937;
+  background: #eef3fb;
+}
+
+.detected-data-preview {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1f2937;
+  white-space: pre-wrap;
+  background: #ffffff;
+  border-top: 1px solid #d7dbe4;
+  max-height: 230px;
+  overflow: auto;
+}
+
 .model-config,
 .template-config {
   margin-bottom: 12px;

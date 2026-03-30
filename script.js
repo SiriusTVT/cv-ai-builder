@@ -53,6 +53,7 @@ const SECTION_READABLE_FALLBACKS = {
 let latestCvText = "";
 let latestUsedModel = "";
 let selectedImageDataUrl = "";
+let latestUserInputText = "";
 
 function getSavedApiKey() {
   return localStorage.getItem("hf_api_key") || "";
@@ -581,7 +582,168 @@ function hasAnyKeyword(text, keywords) {
   return keywords.some((keyword) => normalized.includes(normalizeFieldKey(keyword)));
 }
 
-function inferProfileContextFromSections(sections) {
+function extractNameHintFromInput(text) {
+  const match = String(text || "").match(/^\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÜÑáéíóúñ]+){1,4})/);
+  return match ? sanitizeDisplayLine(match[1]) : "";
+}
+
+function extractContactHintsFromInput(text) {
+  const raw = String(text || "");
+  const emails = uniqueFirst(raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [], 2);
+  const phones = uniqueFirst(raw.match(/(?:\+?\d[\d\s\-()]{7,}\d)/g) || [], 2);
+  return { emails, phones };
+}
+
+function extractLocationHintFromInput(text) {
+  const lowered = normalizeFieldKey(text);
+
+  if (lowered.includes("cali") && lowered.includes("colombia")) {
+    return "Cali, Colombia";
+  }
+
+  const hits = ["cali", "bogota", "medellin", "colombia", "mexico", "peru", "chile", "argentina", "ecuador", "espana"];
+  const city = hits.find((item) => lowered.includes(item));
+  if (!city) {
+    return "";
+  }
+
+  return `${city.charAt(0).toUpperCase()}${city.slice(1)}`;
+}
+
+function extractAvailabilityHintFromInput(text) {
+  const lowered = normalizeFieldKey(text);
+  const fullTime = lowered.includes("tiempo completo") || lowered.includes("full time") || lowered.includes("full-time");
+  const partTime = lowered.includes("medio tiempo") || lowered.includes("part time") || lowered.includes("part-time");
+  const remote = lowered.includes("remoto") || lowered.includes("remote") || lowered.includes("hibrido") || lowered.includes("hybrid");
+
+  if (fullTime) {
+    return `Disponible para jornada completa${remote ? " y trabajo remoto/hibrido" : ""}`;
+  }
+
+  if (partTime) {
+    return `Disponible para jornada parcial${remote ? " y trabajo remoto/hibrido" : ""}`;
+  }
+
+  if (remote) {
+    return "Abierto a trabajo remoto/hibrido";
+  }
+
+  return "Disponibilidad sujeta a acuerdo";
+}
+
+function formatHintLines(label, values) {
+  if (!values || !values.length) {
+    return `- ${label}: Sin dato explicito`;
+  }
+
+  return values.map((value) => `- ${label}: ${value}`).join("\n");
+}
+
+function buildDetectedDataPreviewFromInput(inputText) {
+  const raw = String(inputText || "").trim();
+  if (!raw) {
+    return "Escribe tu informacion para ver como se estructura antes de generar.";
+  }
+
+  const fragments = splitRawFragments(raw);
+  const nameHint = extractNameHintFromInput(raw);
+  const locationHint = extractLocationHintFromInput(raw);
+  const availabilityHint = extractAvailabilityHintFromInput(raw);
+  const contact = extractContactHintsFromInput(raw);
+
+  const educationHints = extractFragmentsByKeywords(
+    fragments,
+    ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "pregrado", "maestr"],
+    4
+  );
+  const experienceHints = extractFragmentsByKeywords(
+    fragments,
+    ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"],
+    5
+  );
+  const projectHints = extractFragmentsByKeywords(
+    fragments,
+    ["proyecto", "project", "automatizacion", "produccion", "transformacion", "implement"],
+    4
+  );
+  const skillHints = extractFragmentsByKeywords(
+    fragments,
+    ["python", "sql", "power bi", "excel", "react", "node", "api", "postgres", "mysql", "mongodb", "firebase", "docker", "git", "ci/cd", "pandas", "numpy", "habilidad", "skills"],
+    7
+  );
+  const languageHints = extractFragmentsByKeywords(
+    fragments,
+    ["ingles", "english", "bilingue", "idioma", "languages", "lenguaje"],
+    3
+  );
+
+  return [
+    "DATOS ESTRUCTURADOS DETECTADOS (vista previa):",
+    `- Name hint: ${nameHint || "Sin dato explicito"}`,
+    `- Location hint: ${locationHint || "Sin dato explicito"}`,
+    `- Availability hint: ${availabilityHint}`,
+    formatHintLines("Email hint", contact.emails),
+    formatHintLines("Phone hint", contact.phones),
+    formatHintLines("Education hint", educationHints),
+    formatHintLines("Work experience hint", experienceHints),
+    formatHintLines("Projects hint", projectHints),
+    formatHintLines("Technical skills hint", skillHints),
+    formatHintLines("Languages hint", languageHints)
+  ].join("\n");
+}
+
+function renderDetectedDataPreview(inputText) {
+  const previewEl = document.getElementById("detectedDataPreview");
+  if (!previewEl) {
+    return;
+  }
+
+  previewEl.textContent = buildDetectedDataPreviewFromInput(inputText);
+}
+
+function splitRawFragments(text) {
+  return String(text || "")
+    .split(/[\n\r.;]+/)
+    .map((part) => sanitizeDisplayLine(part))
+    .filter(Boolean);
+}
+
+function uniqueFirst(items, maxItems) {
+  const output = [];
+  const seen = new Set();
+
+  for (const item of items) {
+    const clean = sanitizeDisplayLine(item);
+    if (!clean) {
+      continue;
+    }
+
+    const key = clean.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    output.push(clean);
+
+    if (output.length >= maxItems) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function extractFragmentsByKeywords(fragments, keywords, maxItems) {
+  const matched = fragments.filter((fragment) => {
+    const lowered = normalizeFieldKey(fragment);
+    return keywords.some((keyword) => lowered.includes(normalizeFieldKey(keyword)));
+  });
+
+  return uniqueFirst(matched, maxItems);
+}
+
+function inferProfileContextFromSections(sections, sourceText) {
   const sectionMap = new Map((sections || []).map((section) => [section.id, section]));
 
   const name = sectionLinesToPlainLines(sectionMap.get("name"))[0] || "";
@@ -590,8 +752,9 @@ function inferProfileContextFromSections(sections) {
   const summary = sectionLinesToPlainLines(sectionMap.get("professional-summary")).slice(0, 3).join(" ") || "";
 
   const allLines = (sections || []).flatMap((section) => sectionLinesToPlainLines(section));
-  const allText = allLines.join(" ");
+  const allText = `${allLines.join(" ")} ${String(sourceText || "")}`.trim();
   const normalizedText = normalizeFieldKey(allText);
+  const sourceFragments = splitRawFragments(sourceText);
 
   let location = "";
   const locationMatch = normalizedText.match(/\b(cali|bogota|medellin|colombia|mexico|peru|chile|argentina|ecuador|espana)\b/);
@@ -629,6 +792,27 @@ function inferProfileContextFromSections(sections) {
     .filter((item) => item.keywords.some((keyword) => normalizedText.includes(normalizeFieldKey(keyword))))
     .map((item) => item.label);
 
+  const educationHints = extractFragmentsByKeywords(
+    sourceFragments,
+    ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "pregrado", "maestr"],
+    4
+  );
+  const experienceHints = extractFragmentsByKeywords(
+    sourceFragments,
+    ["experiencia", "trabaj", "aprendiz", "manager", "project manager", "empresa", "cargo", "rol", "desde", "actualmente"],
+    5
+  );
+  const projectHints = extractFragmentsByKeywords(
+    sourceFragments,
+    ["proyecto", "project", "automatizacion", "produccion", "transformacion", "implement"],
+    4
+  );
+  const languageHints = extractFragmentsByKeywords(
+    sourceFragments,
+    ["ingles", "english", "bilingue", "idioma", "languages", "lenguaje"],
+    3
+  );
+
   return {
     name,
     age,
@@ -637,7 +821,11 @@ function inferProfileContextFromSections(sections) {
     location,
     availability,
     languageLine,
-    skillBullets: detectedSkills
+    skillBullets: detectedSkills,
+    educationHints,
+    experienceHints,
+    projectHints,
+    languageHints
   };
 }
 
@@ -672,6 +860,10 @@ function buildSectionFallbackLines(sectionId, context) {
   }
 
   if (sectionId === "work-experience") {
+    if (ctx.experienceHints && ctx.experienceHints.length) {
+      return ctx.experienceHints.map((item) => ({ type: "bullet", text: item }));
+    }
+
     return [
       { type: "bullet", text: "Participacion en actividades operativas y tecnicas con enfoque en cumplimiento de objetivos." },
       { type: "bullet", text: "Apoyo en mejoras de proceso, calidad de entrega y seguimiento de tareas." },
@@ -680,6 +872,10 @@ function buildSectionFallbackLines(sectionId, context) {
   }
 
   if (sectionId === "projects") {
+    if (ctx.projectHints && ctx.projectHints.length) {
+      return ctx.projectHints.map((item) => ({ type: "bullet", text: item }));
+    }
+
     return [
       { type: "bullet", text: "Proyecto orientado a automatizacion y eficiencia de procesos internos." },
       { type: "bullet", text: "Proyecto de analitica y visualizacion para soporte a decisiones." }
@@ -687,6 +883,10 @@ function buildSectionFallbackLines(sectionId, context) {
   }
 
   if (sectionId === "education") {
+    if (ctx.educationHints && ctx.educationHints.length) {
+      return ctx.educationHints.map((item) => ({ type: "text", text: item }));
+    }
+
     return [
       { type: "text", text: "Formacion academica alineada con el desarrollo profesional del candidato." }
     ];
@@ -711,6 +911,10 @@ function buildSectionFallbackLines(sectionId, context) {
   }
 
   if (sectionId === "languages") {
+    if (ctx.languageHints && ctx.languageHints.length) {
+      return ctx.languageHints.map((item) => ({ type: "text", text: item }));
+    }
+
     return [{ type: "text", text: ctx.languageLine || "Comunicacion profesional en espanol e ingles tecnico." }];
   }
 
@@ -745,7 +949,7 @@ function buildCompleteSections(rawText) {
     }
   }
 
-  const context = inferProfileContextFromSections(parsedSections);
+  const context = inferProfileContextFromSections(parsedSections, latestUserInputText || rawText);
   const completedSections = [];
 
   for (const sectionDef of KNOWN_SECTION_DEFINITIONS) {
@@ -1160,6 +1364,7 @@ async function generarCV() {
     return;
   }
 
+  latestUserInputText = inputLibre;
   setSelectedModel(requestedModel);
   preview.innerHTML = "<p>Generando CV profesional...</p>";
 
@@ -1343,6 +1548,16 @@ window.addEventListener("DOMContentLoaded", function() {
   cargarModeloGuardado();
   cargarTemplateGuardado();
   renderEmptyPreview();
+
+  const inputLibreEl = document.getElementById("inputLibre");
+  renderDetectedDataPreview(inputLibreEl ? inputLibreEl.value : "");
+
+  if (inputLibreEl) {
+    inputLibreEl.addEventListener("input", function() {
+      latestUserInputText = inputLibreEl.value.trim();
+      renderDetectedDataPreview(inputLibreEl.value);
+    });
+  }
 
   const modelSelect = document.getElementById("modeloSalida");
   if (modelSelect) {

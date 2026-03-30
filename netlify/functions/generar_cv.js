@@ -7,7 +7,158 @@ const HF_MODEL_CANDIDATES = [
 ];
 const HF_MODEL_SET = new Set(HF_MODEL_CANDIDATES);
 
+function normalizeSpaces(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function splitFragments(text) {
+  return String(text || "")
+    .split(/[\n\r.;]+/)
+    .map((part) => normalizeSpaces(part))
+    .filter(Boolean);
+}
+
+function uniqueFirst(items, maxItems) {
+  const output = [];
+  const seen = new Set();
+
+  for (const item of items) {
+    const clean = normalizeSpaces(item);
+    if (!clean) {
+      continue;
+    }
+
+    const key = clean.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    output.push(clean);
+
+    if (output.length >= maxItems) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+function extractNameHint(text) {
+  const match = String(text || "").match(/^\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+){1,4})/);
+  return match ? normalizeSpaces(match[1]) : "";
+}
+
+function extractContactHints(text) {
+  const raw = String(text || "");
+  const emails = uniqueFirst(raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) || [], 2);
+  const phones = uniqueFirst(raw.match(/(?:\+?\d[\d\s\-()]{7,}\d)/g) || [], 2);
+  return { emails, phones };
+}
+
+function extractFragmentsByKeywords(fragments, keywords, maxItems = 4) {
+  const matched = fragments.filter((fragment) => {
+    const lowered = fragment.toLowerCase();
+    return keywords.some((keyword) => lowered.includes(keyword));
+  });
+
+  return uniqueFirst(matched, maxItems);
+}
+
+function extractLocationHint(text) {
+  const lowered = String(text || "").toLowerCase();
+
+  if (lowered.includes("cali") && lowered.includes("colombia")) {
+    return "Cali, Colombia";
+  }
+
+  const cities = ["cali", "bogota", "medellin", "colombia", "mexico", "peru", "chile", "argentina", "ecuador", "espana"];
+  const hit = cities.find((city) => lowered.includes(city));
+  if (!hit) {
+    return "";
+  }
+
+  return `${hit.charAt(0).toUpperCase()}${hit.slice(1)}`;
+}
+
+function extractAvailabilityHint(text) {
+  const lowered = String(text || "").toLowerCase();
+  const fullTime = lowered.includes("tiempo completo") || lowered.includes("full time") || lowered.includes("full-time");
+  const partTime = lowered.includes("medio tiempo") || lowered.includes("part time") || lowered.includes("part-time");
+  const remote = lowered.includes("remoto") || lowered.includes("remote") || lowered.includes("hibrido") || lowered.includes("hybrid");
+
+  if (fullTime) {
+    return `Disponible para jornada completa${remote ? " y trabajo remoto/hibrido" : ""}`;
+  }
+
+  if (partTime) {
+    return `Disponible para jornada parcial${remote ? " y trabajo remoto/hibrido" : ""}`;
+  }
+
+  if (remote) {
+    return "Abierto a trabajo remoto/hibrido";
+  }
+
+  return "Disponibilidad sujeta a acuerdo";
+}
+
+function buildStructuredInputBlock(inputLibre) {
+  const raw = String(inputLibre || "");
+  const fragments = splitFragments(raw);
+
+  const nameHint = extractNameHint(raw);
+  const locationHint = extractLocationHint(raw);
+  const availabilityHint = extractAvailabilityHint(raw);
+  const { emails, phones } = extractContactHints(raw);
+
+  const educationHints = extractFragmentsByKeywords(
+    fragments,
+    ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "maestr", "pregrado"]
+  );
+  const experienceHints = extractFragmentsByKeywords(
+    fragments,
+    ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"]
+  );
+  const projectHints = extractFragmentsByKeywords(
+    fragments,
+    ["proyecto", "project", "producto", "implement", "desarrollo", "automatizacion", "produccion"]
+  );
+  const skillHints = extractFragmentsByKeywords(
+    fragments,
+    ["habilidad", "skills", "python", "sql", "power bi", "excel", "react", "node", "api", "postgres", "mysql", "mongodb", "firebase", "docker", "git", "ci/cd", "pandas", "numpy"]
+  );
+  const languageHints = extractFragmentsByKeywords(
+    fragments,
+    ["ingles", "english", "bilingue", "idioma", "languages", "lenguajes"],
+    3
+  );
+
+  function asBullets(title, values) {
+    if (values.length) {
+      return values.map((value) => `- ${title}: ${value}`).join("\n");
+    }
+
+    return `- ${title}: Sin dato explicito`;
+  }
+
+  return [
+    "DATOS ESTRUCTURADOS DETECTADOS (extraidos del texto original):",
+    `- Name hint: ${nameHint || "Sin dato explicito"}`,
+    `- Location hint: ${locationHint || "Sin dato explicito"}`,
+    `- Availability hint: ${availabilityHint}`,
+    asBullets("Email hint", emails),
+    asBullets("Phone hint", phones),
+    asBullets("Education hint", educationHints),
+    asBullets("Work experience hint", experienceHints),
+    asBullets("Projects hint", projectHints),
+    asBullets("Technical skills hint", skillHints),
+    asBullets("Languages hint", languageHints)
+  ].join("\n");
+}
+
 function construirPrompt(inputLibre) {
+  const structuredBlock = buildStructuredInputBlock(inputLibre);
+
   return `Actua como un consultor senior de reclutamiento y redaccion de CVs ATS.
 
 OBJETIVO:
@@ -17,6 +168,13 @@ PRIORIDADES:
 1. No omitir datos del usuario: conserva toda informacion util.
 2. Reescribir con calidad profesional: claridad, impacto y lenguaje de accion.
 3. Estructura ATS: secciones claras, keywords, legibilidad.
+
+${structuredBlock}
+
+INSTRUCCION CRITICA:
+- Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
+- Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
+- No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
 - Name:

@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -15,7 +16,147 @@ HF_MODEL_CANDIDATES = [
 HF_MODEL_SET = set(HF_MODEL_CANDIDATES)
 
 
+def normalize_spaces(text):
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def split_fragments(text):
+    raw = str(text or "")
+    parts = re.split(r"[\n\r.;]+", raw)
+    cleaned = [normalize_spaces(part) for part in parts]
+    return [part for part in cleaned if part]
+
+
+def unique_first(items, max_items=5):
+    output = []
+    seen = set()
+
+    for item in items:
+        clean = normalize_spaces(item)
+        if not clean:
+            continue
+
+        key = clean.lower()
+        if key in seen:
+            continue
+
+        seen.add(key)
+        output.append(clean)
+        if len(output) >= max_items:
+            break
+
+    return output
+
+
+def extract_name_hint(text):
+    match = re.match(r"^\s*([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÑáéíóúñ]+){1,4})", str(text or ""))
+    if match:
+        return normalize_spaces(match.group(1))
+    return ""
+
+
+def extract_contact_hints(text):
+    raw = str(text or "")
+    emails = unique_first(re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", raw), 2)
+    phones = unique_first(re.findall(r"(?:\+?\d[\d\s\-()]{7,}\d)", raw), 2)
+    return emails, phones
+
+
+def extract_fragments_by_keywords(fragments, keywords, max_items=4):
+    output = []
+    for fragment in fragments:
+        lowered = fragment.lower()
+        if any(keyword in lowered for keyword in keywords):
+            output.append(fragment)
+    return unique_first(output, max_items)
+
+
+def extract_location_hint(text):
+    lowered = str(text or "").lower()
+
+    if "cali" in lowered and "colombia" in lowered:
+        return "Cali, Colombia"
+
+    cities = ["cali", "bogota", "medellin", "colombia", "mexico", "peru", "chile", "argentina", "ecuador", "espana"]
+    for city in cities:
+        if city in lowered:
+            return city.capitalize()
+
+    return ""
+
+
+def extract_availability_hint(text):
+    lowered = str(text or "").lower()
+    full_time = "tiempo completo" in lowered or "full time" in lowered or "full-time" in lowered
+    part_time = "medio tiempo" in lowered or "part time" in lowered or "part-time" in lowered
+    remote = "remoto" in lowered or "remote" in lowered or "hibrido" in lowered or "hybrid" in lowered
+
+    if full_time:
+        return "Disponible para jornada completa" + (" y trabajo remoto/hibrido" if remote else "")
+    if part_time:
+        return "Disponible para jornada parcial" + (" y trabajo remoto/hibrido" if remote else "")
+    if remote:
+        return "Abierto a trabajo remoto/hibrido"
+
+    return "Disponibilidad sujeta a acuerdo"
+
+
+def build_structured_input_block(input_libre):
+    raw = str(input_libre or "")
+    fragments = split_fragments(raw)
+
+    name_hint = extract_name_hint(raw)
+    location_hint = extract_location_hint(raw)
+    availability_hint = extract_availability_hint(raw)
+    emails, phones = extract_contact_hints(raw)
+
+    education_hints = extract_fragments_by_keywords(
+        fragments,
+        ["universidad", "colegio", "semestre", "ingenier", "educacion", "formacion", "bachiller", "maestr", "pregrado"],
+    )
+    experience_hints = extract_fragments_by_keywords(
+        fragments,
+        ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"],
+    )
+    project_hints = extract_fragments_by_keywords(
+        fragments,
+        ["proyecto", "project", "producto", "implement", "desarrollo", "automatizacion", "produccion"],
+    )
+    skill_hints = extract_fragments_by_keywords(
+        fragments,
+        ["habilidad", "skills", "python", "sql", "power bi", "excel", "react", "node", "api", "postgres", "mysql", "mongodb", "firebase", "docker", "git", "ci/cd", "pandas", "numpy"],
+    )
+    language_hints = extract_fragments_by_keywords(
+        fragments,
+        ["ingles", "english", "bilingue", "idioma", "languages", "lenguajes"],
+        3,
+    )
+
+    def as_bullets(title, values):
+        if values:
+            return "\n".join([f"- {title}: {value}" for value in values])
+        return f"- {title}: Sin dato explicito"
+
+    lines = [
+        "DATOS ESTRUCTURADOS DETECTADOS (extraidos del texto original):",
+        f"- Name hint: {name_hint or 'Sin dato explicito'}",
+        f"- Location hint: {location_hint or 'Sin dato explicito'}",
+        f"- Availability hint: {availability_hint}",
+        as_bullets("Email hint", emails),
+        as_bullets("Phone hint", phones),
+        as_bullets("Education hint", education_hints),
+        as_bullets("Work experience hint", experience_hints),
+        as_bullets("Projects hint", project_hints),
+        as_bullets("Technical skills hint", skill_hints),
+        as_bullets("Languages hint", language_hints),
+    ]
+
+    return "\n".join(lines)
+
+
 def construir_prompt(input_libre):
+    structured_block = build_structured_input_block(input_libre)
+
     return f"""Actua como un consultor senior de reclutamiento y redaccion de CVs ATS.
 
 OBJETIVO:
@@ -25,6 +166,13 @@ PRIORIDADES:
 1. No omitir datos del usuario: conserva toda informacion util.
 2. Reescribir con calidad profesional: claridad, impacto y lenguaje de accion.
 3. Estructura ATS: secciones claras, keywords, legibilidad.
+
+{structured_block}
+
+INSTRUCCION CRITICA:
+- Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
+- Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
+- No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
 - Name:
