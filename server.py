@@ -36,21 +36,52 @@ def generar_cv():
         if not nombre:
             return jsonify({"success": False, "error": "El nombre es requerido"}), 400
         
-        prompt = f"""Crea una hoja de vida profesional bien formateada con esta información:
+        prompt = f"""Eres un experto en reclutamiento, redacción profesional y optimización de hojas de vida (ATS).
 
-Nombre: {nombre}
-Perfil: {perfil}
-Experiencia: {experiencia}
-Educación: {educacion}
-Habilidades: {habilidades}
+Tu tarea es transformar esta información en una hoja de vida profesional, clara y atractiva.
 
-Por favor:
-1. Mejora la redacción y el formato
-2. Hazlo profesional y atractivo
-3. Organiza la información de forma clara
-4. Usa viñetas donde sea apropiado"""
+INFORMACIÓN PROPORCIONADA:
+- Nombre: {nombre}
+- Perfil: {perfil}
+- Experiencia: {experiencia}
+- Educación: {educacion}
+- Habilidades: {habilidades}
+
+INSTRUCCIONES:
+
+1. Extrae y organiza la información en estas secciones:
+   • Nombre
+   • Perfil profesional (resumen ejecutivo)
+   • Experiencia laboral (con logros cuantificables)
+   • Educación
+   • Habilidades (organizadas por categoría)
+
+2. Mejora completamente la redacción:
+   - Usa lenguaje claro, profesional y persuasivo
+   - Usa verbos de acción (lideré, implementé, desarrollé, etc.)
+   - Convierte descripciones simples en contenido profesional
+   - Destaca logros y resultados medibles
+
+3. Optimiza para sistemas ATS:
+   - Estructura clara y bien organizada
+   - Palabras clave relevantes por industria
+   - Formato profesional sin caracteres especiales
+
+4. Si alguna información está incompleta:
+   - Infiérela inteligentemente sin inventar hechos falsos
+   - Completa gaps razonablemente
+   - Mantén coherencia y realismo
+
+5. Genera una hoja de vida:
+   - Profesional y lista para enviar
+   - Impactante y memorable
+   - Optimizada para ATS
+   - Coherente y bien estructurada
+
+SALIDA:
+Proporciona la hoja de vida completa, estructurada y profesional."""
         
-        print(f"[INFO] Usando Qwen via Replicate")
+        print(f"[INFO] Usando Qwen via Replicate con prompt expert en CV")
         print(f"[INFO] Clave: {replicate_api_key[:20]}...")
         
         # Llamar a la API de Replicate
