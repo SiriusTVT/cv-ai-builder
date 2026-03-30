@@ -8,3 +8,33 @@
 [dev]
   framework = "static"
   command = "python -m http.server 8000"
+
+[[redirects]]
+  from = "/api/canva/auth/start"
+  to = "/.netlify/functions/canva_auth_start"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/canva/oauth/callback"
+  to = "/.netlify/functions/canva_oauth_callback"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/canva/status"
+  to = "/.netlify/functions/canva_status"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/canva/disconnect"
+  to = "/.netlify/functions/canva_disconnect"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/generar-cv-canva"
+  to = "/.netlify/functions/generar_cv_canva"
+  status = 200
+  force = true

@@ -112,6 +112,25 @@ python -m http.server 8000
    - Tu sitio estará en `https://tu-sitio.netlify.app`
    - Los usuarios ingresarán su propia API Key en la aplicación
 
+### Variables de entorno en Netlify (Canva)
+
+En Site settings -> Environment variables agrega:
+
+```env
+CANVA_CLIENT_ID=tu_client_id
+CANVA_CLIENT_SECRET=tu_client_secret
+CANVA_REDIRECT_URI=https://TU-SITIO.netlify.app/api/canva/oauth/callback
+CANVA_FRONTEND_URL=https://TU-SITIO.netlify.app/
+CANVA_SCOPES=design:content:write design:meta:read brandtemplate:content:read brandtemplate:meta:read asset:read asset:write
+CANVA_SESSION_SECRET=una_clave_larga_y_privada
+```
+
+Importante: en Canva Developer Portal debes registrar exactamente el mismo redirect URL:
+
+`https://TU-SITIO.netlify.app/api/canva/oauth/callback`
+
+Si al conectar Canva te aparece 404, normalmente falta publicar el ultimo deploy con las funciones y redirects nuevos, o el redirect URL no coincide exactamente.
+
 ## ✨ Características
 
 ✅ **Sin servidor que mantener** - Usa Netlify Functions (serverless)  

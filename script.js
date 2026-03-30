@@ -261,9 +261,17 @@ function processCanvaCallback() {
 
   let changed = false;
 
-  if (connected === "1" && sessionId) {
-    setCanvaSessionId(sessionId);
-    setCanvaStatus("Canva conectado correctamente.", "success");
+  if (connected === "1") {
+    if (sessionId) {
+      setCanvaSessionId(sessionId);
+    }
+
+    if (getCanvaSessionId()) {
+      setCanvaStatus("Canva conectado correctamente.", "success");
+    } else {
+      setCanvaStatus("Canva conectado, validando sesion...", "info");
+    }
+
     changed = true;
   }
 
@@ -476,6 +484,10 @@ async function generarYEnviarCanva() {
       setCanvaStatus(errorMsg, "error");
       setPreviewError(errorMsg);
       return;
+    }
+
+    if (result.data.canvaSessionId) {
+      setCanvaSessionId(result.data.canvaSessionId);
     }
 
     const canvaInfo = result.data.canva || {};
