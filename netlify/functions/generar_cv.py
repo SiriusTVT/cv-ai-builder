@@ -1,189 +1,230 @@
 import json
-import requests
 import time
+import requests
 
-def handler(event, context):
-    """Genera un CV usando Qwen via Replicate API"""
-    
-    # Solo aceptar POST
-    if event["httpMethod"] != "POST":
-        return {
-            "statusCode": 405,
-            "body": json.dumps({"success": False, "error": "Método no permitido"})
-        }
-    
-    try:
-        # Parsear el body
-        body = json.loads(event["body"])
-        
-        replicate_api_key = body.get("apiKey", "").strip()
-        nombre = body.get("nombre", "").strip()
-        perfil = body.get("perfil", "").strip()
-        experiencia = body.get("experiencia", "").strip()
-        educacion = body.get("educacion", "").strip()
-        habilidades = body.get("habilidades", "").strip()
-        
-        # Validar que se proporcione la clave API
-        if not replicate_api_key:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"success": False, "error": "Clave API de Replicate requerida"})
-            }
-        
-        if not nombre:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"success": False, "error": "El nombre es requerido"})
-            }
-        
-        # Crear el prompt
-        prompt = f"""Eres un experto en reclutamiento, redacción profesional y optimización de hojas de vida (ATS).
+REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
+QWEN_VERSION = "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1"
 
-Tu tarea es transformar esta información en una hoja de vida profesional, clara y atractiva.
 
-INFORMACIÓN PROPORCIONADA:
-- Nombre: {nombre}
-- Perfil: {perfil}
-- Experiencia: {experiencia}
-- Educación: {educacion}
-- Habilidades: {habilidades}
+def construir_prompt(input_libre):
+    return f"""Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
+
+Tu tarea es analizar, organizar y transformar informacion desordenada en una hoja de vida profesional, clara y atractiva.
 
 INSTRUCCIONES:
 
-1. Extrae y organiza la información en estas secciones:
-   • Nombre
-   • Perfil profesional (resumen ejecutivo)
-   • Experiencia laboral (con logros cuantificables)
-   • Educación
-   • Habilidades (organizadas por categoría)
+1. Analiza el texto proporcionado por el usuario (puede estar desordenado, incompleto o mal redactado).
 
-2. Mejora completamente la redacción:
-   - Usa lenguaje claro, profesional y persuasivo
-   - Usa verbos de acción (lideré, implementé, desarrollé, etc.)
-   - Convierte descripciones simples en contenido profesional
-   - Destaca logros y resultados medibles
+2. Extrae y organiza la informacion en estas secciones:
+   - Nombre
+   - Perfil profesional
+   - Experiencia
+   - Educacion
+   - Habilidades
 
-3. Optimiza para sistemas ATS:
-   - Estructura clara y bien organizada
-   - Palabras clave relevantes por industria
-   - Formato profesional sin caracteres especiales
+3. Si alguna seccion no esta clara:
+   - infierela inteligentemente sin inventar informacion falsa
+   - completa con redaccion profesional
 
-4. Si alguna información está incompleta:
-   - Infiérela inteligentemente sin inventar hechos falsos
-   - Completa gaps razonablemente
-   - Mantén coherencia y realismo
+4. Mejora completamente la redaccion:
+   - usa lenguaje claro, profesional y persuasivo
+   - convierte descripciones simples en contenido profesional
+   - usa verbos de accion
 
-5. Genera una hoja de vida:
-   - Profesional y lista para enviar
-   - Impactante y memorable
-   - Optimizada para ATS
-   - Coherente y bien estructurada
+5. Optimiza para sistemas ATS:
+   - estructura clara
+   - palabras clave relevantes
+   - formato profesional
+
+TEXTO DEL USUARIO:
+\"\"\"
+{input_libre}
+\"\"\"
 
 SALIDA:
-Proporciona la hoja de vida completa, estructurada y profesional."""
-        
-        # Headers para Replicate
-        headers = {
-            "Authorization": f"Token {replicate_api_key}",
-            "Content-Type": "application/json"
+Genera una hoja de vida estructurada con:
+- Nombre
+- Perfil profesional
+- Experiencia
+- Educacion
+- Habilidades
+
+Formato limpio, claro y listo para enviar."""
+
+
+def parse_replicate_error(response):
+    try:
+        error_data = response.json()
+        detail = error_data.get("detail")
+        if isinstance(detail, str) and detail:
+            return detail
+        if isinstance(error_data, dict):
+            return str(error_data)
+    except Exception:
+        pass
+
+    return f"Error {response.status_code}: {response.text[:200]}"
+
+
+def handler(event, context):
+    if event.get("httpMethod") != "POST":
+        return {
+            "statusCode": 405,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps({"success": False, "error": "Metodo no permitido"}),
         }
-        
-        # Payload para Qwen en Replicate
-        payload = {
-            "version": "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1",  # qwen-72b
-            "input": {
-                "prompt": prompt,
-                "max_tokens": 1500,
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
-        }
-        
-        # Crear predicción en Replicate
-        response = requests.post(
-            "https://api.replicate.com/v1/predictions",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        
-        if response.status_code != 201:
-            try:
-                error_data = response.json()
-                error_msg = error_data.get("detail", str(error_data))
-            except:
-                error_msg = f"Error {response.status_code}"
-            
+
+    try:
+        body = json.loads(event.get("body") or "{}")
+
+        replicate_api_key = str(body.get("apiKey", "")).strip()
+        input_libre = str(body.get("inputLibre", "")).strip()
+
+        if not replicate_api_key:
             return {
                 "statusCode": 400,
                 "headers": {
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*"
+                    "Access-Control-Allow-Origin": "*",
                 },
-                "body": json.dumps({"success": False, "error": f"Error en Replicate: {error_msg}"})
+                "body": json.dumps({"success": False, "error": "Clave API de Replicate requerida"}),
             }
-        
-        response_data = response.json()
-        prediction_id = response_data.get("id")
-        
-        # Esperar a que la predicción se complete (máximo 50 segundos)
-        max_attempts = 25
-        for attempt in range(max_attempts):
+
+        if not input_libre:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "body": json.dumps({"success": False, "error": "Debes ingresar informacion en el cuadro de texto"}),
+            }
+
+        headers = {
+            "Authorization": f"Token {replicate_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "version": QWEN_VERSION,
+            "input": {
+                "prompt": construir_prompt(input_libre),
+                "max_tokens": 1500,
+                "temperature": 0.7,
+                "top_p": 0.9,
+            },
+        }
+
+        create_response = requests.post(
+            REPLICATE_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+
+        if create_response.status_code != 201:
+            error_msg = parse_replicate_error(create_response)
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "body": json.dumps({"success": False, "error": f"Error en Replicate: {error_msg}"}),
+            }
+
+        prediction_id = create_response.json().get("id")
+        if not prediction_id:
+            return {
+                "statusCode": 500,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
+                "body": json.dumps({"success": False, "error": "Replicate no devolvio id de prediccion"}),
+            }
+
+        for _ in range(25):
             time.sleep(2)
-            
-            # Obtener el estado de la predicción
-            check_response = requests.get(
-                f"https://api.replicate.com/v1/predictions/{prediction_id}",
+
+            status_response = requests.get(
+                f"{REPLICATE_API_URL}/{prediction_id}",
                 headers=headers,
-                timeout=10
+                timeout=10,
             )
-            
-            if check_response.status_code == 200:
-                check_data = check_response.json()
-                
-                if check_data.get("status") == "succeeded":
-                    output = check_data.get("output", [])
-                    if isinstance(output, list):
-                        texto = "".join(output)
-                    else:
-                        texto = str(output)
-                    
-                    return {
-                        "statusCode": 200,
-                        "headers": {
-                            "Content-Type": "application/json",
-                            "Access-Control-Allow-Origin": "*"
-                        },
-                        "body": json.dumps({"success": True, "texto": texto})
-                    }
-                
-                elif check_data.get("status") == "failed":
-                    error = check_data.get("error", "Error desconocido")
-                    return {
-                        "statusCode": 400,
-                        "headers": {
-                            "Content-Type": "application/json",
-                            "Access-Control-Allow-Origin": "*"
-                        },
-                        "body": json.dumps({"success": False, "error": f"Error en Replicate: {error}"})
-                    }
-        
-        # Timeout
+
+            if status_response.status_code != 200:
+                continue
+
+            status_data = status_response.json()
+            status = status_data.get("status")
+
+            if status == "succeeded":
+                output = status_data.get("output", "")
+                if isinstance(output, list):
+                    texto = "".join(output)
+                else:
+                    texto = str(output)
+
+                if not texto.strip():
+                    texto = "No se recibio contenido de la IA. Intenta de nuevo."
+
+                return {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                    "body": json.dumps({"success": True, "texto": texto}),
+                }
+
+            if status in {"failed", "canceled"}:
+                error_msg = status_data.get("error", "La prediccion fallo")
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                    "body": json.dumps({"success": False, "error": f"Error en Replicate: {error_msg}"}),
+                }
+
         return {
             "statusCode": 504,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
+                "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."})
+            "body": json.dumps({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}),
         }
-    
-    except Exception as e:
+
+    except requests.exceptions.Timeout:
+        return {
+            "statusCode": 504,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}),
+        }
+    except requests.exceptions.RequestException as exc:
         return {
             "statusCode": 500,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
+                "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({"success": False, "error": str(e)})
+            "body": json.dumps({"success": False, "error": f"Error de conexion: {str(exc)}"}),
+        }
+    except Exception as exc:
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+            },
+            "body": json.dumps({"success": False, "error": str(exc)}),
         }

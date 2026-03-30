@@ -1,199 +1,168 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import os
-from dotenv import load_dotenv
 import traceback
-import json
-
-load_dotenv()
+import time
 
 app = Flask(__name__)
 CORS(app)
 
-# API de Replicate para usar Qwen
 REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
-QWEN_MODEL = "qwen/qwen-72b"
+QWEN_VERSION = "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1"
 
-@app.route('/api/generar-cv', methods=['POST'])
-def generar_cv():
-    try:
-        data = request.json
-        
-        # Obtener la clave API del cliente (Replicate)
-        replicate_api_key = data.get("apiKey", "").strip()
-        
-        if not replicate_api_key:
-            return jsonify({"success": False, "error": "Clave API de Replicate requerida"}), 400
-        
-        nombre = data.get('nombre', '').strip()
-        perfil = data.get('perfil', '').strip()
-        experiencia = data.get('experiencia', '').strip()
-        educacion = data.get('educacion', '').strip()
-        habilidades = data.get('habilidades', '').strip()
-        
-        # Validar que haya al menos algo de contenido
-        if not nombre:
-            return jsonify({"success": False, "error": "El nombre es requerido"}), 400
-        
-        prompt = f"""Eres un experto en reclutamiento, redacción profesional y optimización de hojas de vida (ATS).
 
-Tu tarea es transformar esta información en una hoja de vida profesional, clara y atractiva.
+def construir_prompt(input_libre):
+    return f"""Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
 
-INFORMACIÓN PROPORCIONADA:
-- Nombre: {nombre}
-- Perfil: {perfil}
-- Experiencia: {experiencia}
-- Educación: {educacion}
-- Habilidades: {habilidades}
+Tu tarea es analizar, organizar y transformar informacion desordenada en una hoja de vida profesional, clara y atractiva.
 
 INSTRUCCIONES:
 
-1. Extrae y organiza la información en estas secciones:
-   • Nombre
-   • Perfil profesional (resumen ejecutivo)
-   • Experiencia laboral (con logros cuantificables)
-   • Educación
-   • Habilidades (organizadas por categoría)
+1. Analiza el texto proporcionado por el usuario (puede estar desordenado, incompleto o mal redactado).
 
-2. Mejora completamente la redacción:
-   - Usa lenguaje claro, profesional y persuasivo
-   - Usa verbos de acción (lideré, implementé, desarrollé, etc.)
-   - Convierte descripciones simples en contenido profesional
-   - Destaca logros y resultados medibles
+2. Extrae y organiza la informacion en estas secciones:
+   - Nombre
+   - Perfil profesional
+   - Experiencia
+   - Educacion
+   - Habilidades
 
-3. Optimiza para sistemas ATS:
-   - Estructura clara y bien organizada
-   - Palabras clave relevantes por industria
-   - Formato profesional sin caracteres especiales
+3. Si alguna seccion no esta clara:
+   - infierela inteligentemente sin inventar informacion falsa
+   - completa con redaccion profesional
 
-4. Si alguna información está incompleta:
-   - Infiérela inteligentemente sin inventar hechos falsos
-   - Completa gaps razonablemente
-   - Mantén coherencia y realismo
+4. Mejora completamente la redaccion:
+   - usa lenguaje claro, profesional y persuasivo
+   - convierte descripciones simples en contenido profesional
+   - usa verbos de accion
 
-5. Genera una hoja de vida:
-   - Profesional y lista para enviar
-   - Impactante y memorable
-   - Optimizada para ATS
-   - Coherente y bien estructurada
+5. Optimiza para sistemas ATS:
+   - estructura clara
+   - palabras clave relevantes
+   - formato profesional
+
+TEXTO DEL USUARIO:
+\"\"\"
+{input_libre}
+\"\"\"
 
 SALIDA:
-Proporciona la hoja de vida completa, estructurada y profesional."""
-        
-        print(f"[INFO] Usando Qwen via Replicate con prompt expert en CV")
-        print(f"[INFO] Clave: {replicate_api_key[:20]}...")
-        
-        # Llamar a la API de Replicate
+Genera una hoja de vida estructurada con:
+- Nombre
+- Perfil profesional
+- Experiencia
+- Educacion
+- Habilidades
+
+Formato limpio, claro y listo para enviar."""
+
+
+def parse_replicate_error(response):
+    try:
+        error_data = response.json()
+        detail = error_data.get("detail")
+        if isinstance(detail, str) and detail:
+            return detail
+        if isinstance(error_data, dict):
+            return str(error_data)
+    except Exception:
+        pass
+
+    return f"Error {response.status_code}: {response.text[:200]}"
+
+
+@app.route("/api/generar-cv", methods=["POST"])
+def generar_cv():
+    try:
+        data = request.get_json(silent=True) or {}
+
+        replicate_api_key = str(data.get("apiKey", "")).strip()
+        input_libre = str(data.get("inputLibre", "")).strip()
+
+        if not replicate_api_key:
+            return jsonify({"success": False, "error": "Clave API de Replicate requerida"}), 400
+
+        if not input_libre:
+            return jsonify({"success": False, "error": "Debes ingresar informacion en el cuadro de texto"}), 400
+
+        prompt = construir_prompt(input_libre)
+
         headers = {
             "Authorization": f"Token {replicate_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        
+
         payload = {
-            "version": "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1",  # qwen-72b
+            "version": QWEN_VERSION,
             "input": {
                 "prompt": prompt,
                 "max_tokens": 1500,
                 "temperature": 0.7,
-                "top_p": 0.9
-            }
+                "top_p": 0.9,
+            },
         }
-        
-        response = requests.post(
+
+        create_response = requests.post(
             REPLICATE_API_URL,
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=30,
         )
-        
-        print(f"[INFO] Respuesta de Replicate - Status: {response.status_code}")
-        
-        if response.status_code == 201:
-            response_data = response.json()
-            
-            # Replicate devuelve un ID de predicción, necesitamos esperar
-            prediction_id = response_data.get("id")
-            print(f"[INFO] Predicción creada: {prediction_id}")
-            
-            # Esperar a que se complete
-            import time
-            max_attempts = 30
-            for attempt in range(max_attempts):
-                time.sleep(2)
-                
-                # Obtener el estado
-                check_response = requests.get(
-                    f"https://api.replicate.com/v1/predictions/{prediction_id}",
-                    headers=headers,
-                    timeout=10
-                )
-                
-                if check_response.status_code == 200:
-                    check_data = check_response.json()
-                    
-                    if check_data.get("status") == "succeeded":
-                        output = check_data.get("output", [])
-                        if isinstance(output, list):
-                            texto = "".join(output)
-                        else:
-                            texto = str(output)
-                        
-                        print(f"[INFO] CV generado exitosamente")
-                        return jsonify({"success": True, "texto": texto})
-                    
-                    elif check_data.get("status") == "failed":
-                        error = check_data.get("error", "Error desconocido en Replicate")
-                        print(f"[ERROR] Predicción fallida: {error}")
-                        return jsonify({
-                            "success": False,
-                            "error": f"Error en Replicate: {error}"
-                        }), 400
-            
-            # Timeout
-            return jsonify({
-                "success": False,
-                "error": "Tiempo de espera agotado. Intenta de nuevo."
-            }), 504
-        
-        else:
-            try:
-                error_data = response.json()
-                error_msg = error_data.get("detail", str(error_data))
-            except:
-                error_msg = f"Error {response.status_code}: {response.text[:200]}"
-            
-            print(f"[ERROR] Error de Replicate: {error_msg}")
-            
-            return jsonify({
-                "success": False,
-                "error": f"Error de Replicate: {error_msg}"
-            }), 400
-    
-    except requests.exceptions.Timeout:
-        return jsonify({
-            "success": False,
-            "error": "Tiempo de espera agotado. Intenta de nuevo."
-        }), 504
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] Error de conexión: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": f"Error de conexión: {str(e)}"
-        }), 500
-    except Exception as e:
-        print(f"[ERROR] Error inesperado: {str(e)}")
-        print(traceback.format_exc())
-        return jsonify({
-            "success": False,
-            "error": f"Error inesperado: {str(e)}"
-        }), 500
 
-@app.route('/health', methods=['GET'])
+        if create_response.status_code != 201:
+            error_msg = parse_replicate_error(create_response)
+            return jsonify({"success": False, "error": f"Error en Replicate: {error_msg}"}), 400
+
+        prediction_id = create_response.json().get("id")
+        if not prediction_id:
+            return jsonify({"success": False, "error": "Replicate no devolvio id de prediccion"}), 500
+
+        for _ in range(30):
+            time.sleep(2)
+
+            status_response = requests.get(
+                f"{REPLICATE_API_URL}/{prediction_id}",
+                headers=headers,
+                timeout=10,
+            )
+
+            if status_response.status_code != 200:
+                continue
+
+            status_data = status_response.json()
+            status = status_data.get("status")
+
+            if status == "succeeded":
+                output = status_data.get("output", "")
+                if isinstance(output, list):
+                    texto = "".join(output)
+                else:
+                    texto = str(output)
+
+                if not texto.strip():
+                    texto = "No se recibio contenido de la IA. Intenta de nuevo."
+
+                return jsonify({"success": True, "texto": texto})
+
+            if status in {"failed", "canceled"}:
+                error_msg = status_data.get("error", "La prediccion fallo")
+                return jsonify({"success": False, "error": f"Error en Replicate: {error_msg}"}), 400
+
+        return jsonify({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}), 504
+
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "Tiempo de espera agotado. Intenta de nuevo."}), 504
+    except requests.exceptions.RequestException as exc:
+        return jsonify({"success": False, "error": f"Error de conexion: {str(exc)}"}), 500
+    except Exception as exc:
+        print(traceback.format_exc())
+        return jsonify({"success": False, "error": f"Error inesperado: {str(exc)}"}), 500
+
+
+@app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
 
-if __name__ == '__main__':
-    print("🚀 Iniciando servidor Flask en http://127.0.0.1:5000")
-    print("📡 Usando Qwen via Replicate API")
+
+if __name__ == "__main__":
     app.run(debug=True, port=5000)

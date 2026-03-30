@@ -25,6 +25,18 @@ textarea, input {
   font-family: Arial, sans-serif;
 }
 
+.raw-input {
+  min-height: 260px;
+  resize: vertical;
+}
+
+.helper-text {
+  display: block;
+  margin: 0 0 12px;
+  color: #555;
+  font-size: 13px;
+}
+
 hr {
   margin: 20px 0;
   border: none;
@@ -76,6 +88,25 @@ hr {
   background: #218838;
 }
 
+button {
+  width: 100%;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+button:not(.btn-secondary) {
+  background: #007bff;
+  color: white;
+}
+
+button:not(.btn-secondary):hover {
+  background: #0062cc;
+}
+
 #apiStatus {
   margin-top: 10px;
   font-size: 14px;
@@ -88,4 +119,19 @@ hr {
 
 .api-error {
   color: #dc3545;
+}
+
+.cv-output {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .container {
+    flex-direction: column;
+  }
+
+  .form, .preview {
+    width: 100%;
+  }
 }

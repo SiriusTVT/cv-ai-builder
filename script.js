@@ -1,49 +1,91 @@
-function cargarAPIKeyGuardada() {
-  const apiKey = localStorage.getItem("gemini_api_key");
-  if (apiKey) {
-    document.getElementById("apiStatus").innerHTML = "<p class='api-success'>✅ API Key configurada</p>";
-    document.getElementById("apiKey").value = apiKey.substring(0, 10) + "***";
+function getSavedApiKey() {
+  return localStorage.getItem("replicate_api_key") || localStorage.getItem("gemini_api_key") || "";
+}
+
+function setSavedApiKey(apiKey) {
+  localStorage.setItem("replicate_api_key", apiKey);
+  localStorage.removeItem("gemini_api_key");
+}
+
+function maskApiKey(apiKey) {
+  if (!apiKey) {
+    return "";
   }
+
+  if (apiKey.length <= 10) {
+    return `${apiKey.slice(0, 4)}***`;
+  }
+
+  return `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`;
+}
+
+function escapeHtml(text) {
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  };
+
+  return text.replace(/[&<>"']/g, function(char) {
+    return map[char];
+  });
+}
+
+function cargarAPIKeyGuardada() {
+  const apiKey = getSavedApiKey();
+  if (!apiKey) {
+    return;
+  }
+
+  document.getElementById("apiStatus").innerHTML = "<p class='api-success'>API Key configurada</p>";
+  document.getElementById("apiKey").value = maskApiKey(apiKey);
 }
 
 function guardarAPIKey() {
-  const apiKey = document.getElementById("apiKey").value.trim();
+  const input = document.getElementById("apiKey");
+  const apiKey = input.value.trim();
   const statusDiv = document.getElementById("apiStatus");
+  const savedApiKey = getSavedApiKey();
 
   if (!apiKey) {
-    statusDiv.innerHTML = "<p class='api-error'>❌ Ingresa una clave API válida</p>";
+    statusDiv.innerHTML = "<p class='api-error'>Ingresa una API Key valida</p>";
     return;
   }
 
-  localStorage.setItem("gemini_api_key", apiKey);
-  statusDiv.innerHTML = "<p class='api-success'>✅ Clave API guardada correctamente</p>";
-  document.getElementById("apiKey").value = apiKey.substring(0, 10) + "***";
+  if (apiKey.includes("*") && savedApiKey) {
+    statusDiv.innerHTML = "<p class='api-success'>API Key ya configurada</p>";
+    return;
+  }
+
+  setSavedApiKey(apiKey);
+  statusDiv.innerHTML = "<p class='api-success'>Clave API guardada correctamente</p>";
+  input.value = maskApiKey(apiKey);
 }
 
 async function generarCV() {
-  const apiKey = localStorage.getItem("gemini_api_key");
-  
+  const apiKey = getSavedApiKey();
+  const inputLibre = document.getElementById("inputLibre").value.trim();
+  const preview = document.getElementById("preview");
+
   if (!apiKey) {
-    document.getElementById("preview").innerHTML = "<p style='color: red;'>⚠️ Por favor, ingresa tu Google Gemini API Key primero</p>";
+    preview.innerHTML = "<p style='color: red;'>Primero guarda tu Replicate API Key.</p>";
     return;
   }
 
-  const nombre = document.getElementById("nombre").value;
-  const perfil = document.getElementById("perfil").value;
-  const experiencia = document.getElementById("experiencia").value;
-  const educacion = document.getElementById("educacion").value;
-  const habilidades = document.getElementById("habilidades").value;
+  if (!inputLibre) {
+    preview.innerHTML = "<p style='color: red;'>Escribe o pega informacion en el cuadro de texto.</p>";
+    return;
+  }
 
-  document.getElementById("preview").innerHTML = "<p>Generando CV...</p>";
+  preview.innerHTML = "<p>Generando CV profesional...</p>";
 
   try {
-    // Detectar si estamos en desarrollo o producción
-    const apiUrl = window.location.hostname === 'localhost' 
+    const apiUrl = window.location.hostname === "localhost"
       ? "http://localhost:5000/api/generar-cv"
       : "/.netlify/functions/generar_cv";
 
-    console.log("Enviando solicitud a:", apiUrl);
-    
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -51,52 +93,42 @@ async function generarCV() {
       },
       body: JSON.stringify({
         apiKey,
-        nombre,
-        perfil,
-        experiencia,
-        educacion,
-        habilidades
+        inputLibre
       })
     });
 
-    console.log("Status de respuesta:", response.status);
-    
-    // Obtener el texto de la respuesta primero
     const responseText = await response.text();
-    console.log("Respuesta del servidor:", responseText);
-    
     let data;
+
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error("Error al parsear JSON:", parseError);
-      document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: La respuesta del servidor no es válida. Verifica tu API Key y que esté activa.</p>`;
+      preview.innerHTML = "<p style='color: red;'>Error: la respuesta del servidor no es JSON valida.</p>";
       return;
     }
 
-    if (data.success) {
-      document.getElementById("preview").innerHTML = `
-        <h2>${nombre}</h2>
-        <p>${data.texto.replace(/\n/g, "<br>")}</p>
-      `;
-    } else {
-      document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: ${data.error}</p>`;
+    if (!response.ok || !data.success) {
+      preview.innerHTML = `<p style='color: red;'>Error: ${escapeHtml(data.error || "No se pudo generar el CV")}</p>`;
+      return;
     }
+
+    preview.innerHTML = `
+      <h2>Hoja de Vida Generada</h2>
+      <div class="cv-output">${escapeHtml(data.texto || "").replace(/\n/g, "<br>")}</div>
+    `;
   } catch (error) {
-    console.error("Error completo:", error);
-    document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+    preview.innerHTML = `<p style='color: red;'>Error de conexion: ${escapeHtml(error.message)}</p>`;
   }
 }
 
 function descargarPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-
   const contenido = document.getElementById("preview").innerText;
 
-  doc.text(contenido, 10, 10);
+  const lineas = doc.splitTextToSize(contenido, 180);
+  doc.text(lineas, 10, 10);
   doc.save("CV.pdf");
 }
 
-// Cargar API Key al iniciar la página
 window.addEventListener("DOMContentLoaded", cargarAPIKeyGuardada);
