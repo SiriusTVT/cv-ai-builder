@@ -1,5 +1,5 @@
 const REPLICATE_API_URL = "https://api.replicate.com/v1/predictions";
-const QWEN_VERSION = "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1";
+const QWEN_MODEL = "qwen/qwen3-235b-a22b-instruct-2507";
 
 function construirPrompt(inputLibre) {
   return `Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
@@ -103,12 +103,12 @@ exports.handler = async function handler(event) {
     }
 
     const headers = {
-      Authorization: `Token ${replicateApiKey}`,
+      Authorization: `Bearer ${replicateApiKey}`,
       "Content-Type": "application/json"
     };
 
     const payload = {
-      version: QWEN_VERSION,
+      version: QWEN_MODEL,
       input: {
         prompt: construirPrompt(inputLibre),
         max_tokens: 1500,

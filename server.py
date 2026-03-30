@@ -8,7 +8,7 @@ app = Flask(__name__)
 CORS(app)
 
 REPLICATE_API_URL = "https://api.replicate.com/v1/predictions"
-QWEN_VERSION = "2d19859c18c92054145331a3f74ab25eef51f01886d421c3b52495013d2a24a1"
+QWEN_MODEL = "qwen/qwen3-235b-a22b-instruct-2507"
 
 
 def construir_prompt(input_libre):
@@ -88,12 +88,12 @@ def generar_cv():
         prompt = construir_prompt(input_libre)
 
         headers = {
-            "Authorization": f"Token {replicate_api_key}",
+            "Authorization": f"Bearer {replicate_api_key}",
             "Content-Type": "application/json",
         }
 
         payload = {
-            "version": QWEN_VERSION,
+            "version": QWEN_MODEL,
             "input": {
                 "prompt": prompt,
                 "max_tokens": 1500,
