@@ -1,4 +1,6 @@
 const MODEL_STORAGE_KEY = "hf_model_selected";
+const CANVA_TEMPLATE_STORAGE_KEY = "canva_template_id";
+const CANVA_SESSION_STORAGE_KEY = "canva_session_id";
 const MODEL_OPTIONS = [
   "auto",
   "google/gemma-2-2b-it:fastest",
@@ -6,6 +8,22 @@ const MODEL_OPTIONS = [
   "openai/gpt-oss-120b:fastest",
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+
+function isLocalBackend() {
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
+function getGenerarCvApiUrl() {
+  return isLocalBackend()
+    ? "http://localhost:5000/api/generar-cv"
+    : "/.netlify/functions/generar_cv";
+}
+
+function getCanvaApiUrl(path) {
+  const base = isLocalBackend() ? "http://localhost:5000" : "";
+  return `${base}${path}`;
+}
 
 function getSavedApiKey() {
   return localStorage.getItem("hf_api_key") || "";
@@ -26,6 +44,26 @@ function getSelectedModel() {
 function setSelectedModel(value) {
   const safeValue = MODEL_OPTIONS.includes(value) ? value : "auto";
   localStorage.setItem(MODEL_STORAGE_KEY, safeValue);
+}
+
+function getCanvaTemplateId() {
+  return localStorage.getItem(CANVA_TEMPLATE_STORAGE_KEY) || "";
+}
+
+function setCanvaTemplateId(templateId) {
+  localStorage.setItem(CANVA_TEMPLATE_STORAGE_KEY, String(templateId || "").trim());
+}
+
+function getCanvaSessionId() {
+  return localStorage.getItem(CANVA_SESSION_STORAGE_KEY) || "";
+}
+
+function setCanvaSessionId(sessionId) {
+  localStorage.setItem(CANVA_SESSION_STORAGE_KEY, String(sessionId || "").trim());
+}
+
+function clearCanvaSessionId() {
+  localStorage.removeItem(CANVA_SESSION_STORAGE_KEY);
 }
 
 function cargarModeloGuardado() {
@@ -69,9 +107,85 @@ function escapeHtml(text) {
     "'": "&#039;"
   };
 
-  return text.replace(/[&<>"']/g, function(char) {
+  return String(text || "").replace(/[&<>"']/g, function(char) {
     return map[char];
   });
+}
+
+function sanitizeHttpUrl(url) {
+  const text = String(url || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(text);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch (error) {
+    return "";
+  }
+
+  return "";
+}
+
+function setPreviewError(message) {
+  const preview = document.getElementById("preview");
+  preview.innerHTML = `<p style='color: red;'>${escapeHtml(message)}</p>`;
+}
+
+function renderPreview(texto, modelo, canvaInfo, warnings) {
+  const preview = document.getElementById("preview");
+  const modeloUsado = modelo
+    ? `<p class="model-used">Modelo usado: ${escapeHtml(modelo)}</p>`
+    : "";
+
+  const warningList = Array.isArray(warnings) && warnings.length > 0
+    ? `<div class="warning-box"><strong>Nota:</strong><ul>${warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>`
+    : "";
+
+  let canvaBlock = "";
+  if (canvaInfo && typeof canvaInfo === "object") {
+    const editUrl = sanitizeHttpUrl(canvaInfo.editUrl);
+    const thumbUrl = sanitizeHttpUrl(canvaInfo.thumbnailUrl);
+    const mappedFields = Array.isArray(canvaInfo.mappedFields) ? canvaInfo.mappedFields : [];
+
+    canvaBlock = `
+      <div class="canva-result">
+        <h3>Diseno en Canva creado</h3>
+        ${editUrl ? `<p><a href="${escapeHtml(editUrl)}" target="_blank" rel="noopener">Abrir diseno en Canva</a></p>` : ""}
+        ${thumbUrl ? `<img src="${escapeHtml(thumbUrl)}" alt="Vista previa Canva" class="canva-thumb">` : ""}
+        ${mappedFields.length ? `<p class="canva-fields">Campos mapeados: ${escapeHtml(mappedFields.join(", "))}</p>` : ""}
+      </div>
+    `;
+  }
+
+  preview.innerHTML = `
+    <h2>Hoja de Vida Generada</h2>
+    ${modeloUsado}
+    ${warningList}
+    ${canvaBlock}
+    <div class="cv-output">${escapeHtml(texto || "").replace(/\n/g, "<br>")}</div>
+  `;
+}
+
+async function readJsonResponse(response) {
+  const responseText = await response.text();
+  try {
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: JSON.parse(responseText)
+    };
+  } catch (error) {
+    return {
+      ok: response.ok,
+      status: response.status,
+      data: null,
+      parseError: true
+    };
+  }
 }
 
 function cargarAPIKeyGuardada() {
@@ -82,6 +196,16 @@ function cargarAPIKeyGuardada() {
 
   document.getElementById("apiStatus").innerHTML = "<p class='api-success'>API Key configurada</p>";
   document.getElementById("apiKey").value = maskApiKey(apiKey);
+}
+
+function cargarCanvaGuardado() {
+  const template = getCanvaTemplateId();
+  if (template) {
+    const input = document.getElementById("canvaTemplateId");
+    if (input) {
+      input.value = template;
+    }
+  }
 }
 
 function guardarAPIKey() {
@@ -110,6 +234,130 @@ function guardarAPIKey() {
   input.value = maskApiKey(apiKey);
 }
 
+function setCanvaStatus(message, type) {
+  const statusDiv = document.getElementById("canvaStatus");
+  const safeType = ["success", "error", "info"].includes(type) ? type : "info";
+  statusDiv.innerHTML = `<p class="canva-${safeType}">${escapeHtml(message)}</p>`;
+}
+
+function guardarCanvaConfig() {
+  const templateInput = document.getElementById("canvaTemplateId");
+  const templateId = templateInput.value.trim();
+
+  if (!templateId) {
+    setCanvaStatus("Ingresa el Brand Template ID antes de guardar.", "error");
+    return;
+  }
+
+  setCanvaTemplateId(templateId);
+  setCanvaStatus("Configuracion de Canva guardada.", "success");
+}
+
+function processCanvaCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const connected = params.get("canva_connected");
+  const sessionId = params.get("canva_session_id");
+  const callbackError = params.get("canva_error");
+
+  let changed = false;
+
+  if (connected === "1" && sessionId) {
+    setCanvaSessionId(sessionId);
+    setCanvaStatus("Canva conectado correctamente.", "success");
+    changed = true;
+  }
+
+  if (callbackError) {
+    clearCanvaSessionId();
+    setCanvaStatus(`No se pudo conectar Canva: ${callbackError}`, "error");
+    changed = true;
+  }
+
+  if (changed) {
+    params.delete("canva_connected");
+    params.delete("canva_session_id");
+    params.delete("canva_error");
+
+    const newQuery = params.toString();
+    const cleanUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+}
+
+async function validateCanvaStatus() {
+  const sessionId = getCanvaSessionId();
+  const statusUrl = `${getCanvaApiUrl("/api/canva/status")}?sessionId=${encodeURIComponent(sessionId)}`;
+
+  try {
+    const response = await fetch(statusUrl);
+    const result = await readJsonResponse(response);
+
+    if (!result.ok || !result.data || !result.data.success) {
+      setCanvaStatus("No se pudo validar estado de Canva en el backend.", "info");
+      return;
+    }
+
+    if (!result.data.configured) {
+      setCanvaStatus("Canva no esta configurado en el backend (faltan variables CANVA_*).", "error");
+      return;
+    }
+
+    if (result.data.connected) {
+      setCanvaStatus("Canva conectado y listo para generar disenos.", "success");
+    } else {
+      setCanvaStatus("Conecta Canva para enviar el CV a tu plantilla.", "info");
+    }
+  } catch (error) {
+    setCanvaStatus("No se pudo conectar con el backend de Canva.", "error");
+  }
+}
+
+async function conectarCanva() {
+  const templateId = document.getElementById("canvaTemplateId").value.trim();
+  if (!templateId) {
+    setCanvaStatus("Primero guarda el Brand Template ID.", "error");
+    return;
+  }
+
+  setCanvaTemplateId(templateId);
+  const frontendUrl = `${window.location.origin}${window.location.pathname}`;
+  const authUrl = `${getCanvaApiUrl("/api/canva/auth/start")}?frontend=${encodeURIComponent(frontendUrl)}`;
+  window.location.assign(authUrl);
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("No se pudo leer la foto"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readPhotoForCanva() {
+  const input = document.getElementById("fotoPersona");
+  const file = input && input.files ? input.files[0] : null;
+
+  if (!file) {
+    return { dataUrl: "", error: "Debes seleccionar una foto para Canva." };
+  }
+
+  if (!file.type.startsWith("image/")) {
+    return { dataUrl: "", error: "La foto debe ser un archivo de imagen." };
+  }
+
+  if (file.size > MAX_PHOTO_BYTES) {
+    return { dataUrl: "", error: "La foto supera el limite de 8 MB." };
+  }
+
+  try {
+    const dataUrl = await fileToDataUrl(file);
+    return { dataUrl, error: "" };
+  } catch (error) {
+    return { dataUrl: "", error: error.message || "No se pudo leer la foto" };
+  }
+}
+
 async function generarCV() {
   const apiKey = getSavedApiKey();
   const inputLibre = document.getElementById("inputLibre").value.trim();
@@ -117,12 +365,12 @@ async function generarCV() {
   const preview = document.getElementById("preview");
 
   if (!apiKey) {
-    preview.innerHTML = "<p style='color: red;'>Primero guarda tu token de Hugging Face.</p>";
+    setPreviewError("Primero guarda tu token de Hugging Face.");
     return;
   }
 
   if (!inputLibre) {
-    preview.innerHTML = "<p style='color: red;'>Escribe o pega informacion en el cuadro de texto.</p>";
+    setPreviewError("Escribe o pega informacion en el cuadro de texto.");
     return;
   }
 
@@ -130,11 +378,7 @@ async function generarCV() {
   preview.innerHTML = "<p>Generando CV profesional...</p>";
 
   try {
-    const apiUrl = window.location.hostname === "localhost"
-      ? "http://localhost:5000/api/generar-cv"
-      : "/.netlify/functions/generar_cv";
-
-    const response = await fetch(apiUrl, {
+    const response = await fetch(getGenerarCvApiUrl(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -146,32 +390,101 @@ async function generarCV() {
       })
     });
 
-    const responseText = await response.text();
-    let data;
-
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      preview.innerHTML = "<p style='color: red;'>Error: la respuesta del servidor no es JSON valida.</p>";
+    const result = await readJsonResponse(response);
+    if (result.parseError) {
+      setPreviewError("La respuesta del servidor no es JSON valida.");
       return;
     }
 
-    if (!response.ok || !data.success) {
-      preview.innerHTML = `<p style='color: red;'>Error: ${escapeHtml(data.error || "No se pudo generar el CV")}</p>`;
+    if (!result.ok || !result.data || !result.data.success) {
+      setPreviewError(result.data?.error || "No se pudo generar el CV.");
       return;
     }
 
-    const modeloUsado = data.modelo
-      ? `<p class="model-used">Modelo usado: ${escapeHtml(data.modelo)}</p>`
-      : "";
-
-    preview.innerHTML = `
-      <h2>Hoja de Vida Generada</h2>
-      ${modeloUsado}
-      <div class="cv-output">${escapeHtml(data.texto || "").replace(/\n/g, "<br>")}</div>
-    `;
+    renderPreview(result.data.texto || "", result.data.modelo || "", null, []);
   } catch (error) {
-    preview.innerHTML = `<p style='color: red;'>Error de conexion: ${escapeHtml(error.message)}</p>`;
+    setPreviewError(`Error de conexion: ${error.message}`);
+  }
+}
+
+async function generarYEnviarCanva() {
+  const apiKey = getSavedApiKey();
+  const inputLibre = document.getElementById("inputLibre").value.trim();
+  const requestedModel = getSelectedModel();
+  const canvaTemplateId = document.getElementById("canvaTemplateId").value.trim();
+  const canvaSessionId = getCanvaSessionId();
+  const preview = document.getElementById("preview");
+
+  if (!apiKey) {
+    setPreviewError("Primero guarda tu token de Hugging Face.");
+    return;
+  }
+
+  if (!inputLibre) {
+    setPreviewError("Escribe o pega informacion en el cuadro de texto.");
+    return;
+  }
+
+  if (!canvaTemplateId) {
+    setCanvaStatus("Debes ingresar y guardar el Brand Template ID.", "error");
+    return;
+  }
+
+  if (!canvaSessionId) {
+    setCanvaStatus("Primero conecta Canva con el boton 'Conectar Canva'.", "error");
+    return;
+  }
+
+  const photoResult = await readPhotoForCanva();
+  if (photoResult.error) {
+    setCanvaStatus(photoResult.error, "error");
+    return;
+  }
+
+  setSelectedModel(requestedModel);
+  setCanvaTemplateId(canvaTemplateId);
+  setCanvaStatus("Enviando informacion a Canva...", "info");
+  preview.innerHTML = "<p>Generando CV y creando diseno en Canva...</p>";
+
+  try {
+    const response = await fetch(getCanvaApiUrl("/api/generar-cv-canva"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        apiKey,
+        inputLibre,
+        requestedModel,
+        canvaSessionId,
+        canvaTemplateId,
+        fotoDataUrl: photoResult.dataUrl
+      })
+    });
+
+    const result = await readJsonResponse(response);
+    if (result.parseError) {
+      setPreviewError("La respuesta del servidor de Canva no es JSON valida.");
+      return;
+    }
+
+    if (!result.ok || !result.data || !result.data.success) {
+      if (result.status === 401) {
+        clearCanvaSessionId();
+      }
+      const errorMsg = result.data?.error || "No se pudo crear el diseno en Canva.";
+      setCanvaStatus(errorMsg, "error");
+      setPreviewError(errorMsg);
+      return;
+    }
+
+    const canvaInfo = result.data.canva || {};
+    renderPreview(result.data.texto || "", result.data.modelo || "", canvaInfo, result.data.warnings || []);
+    setCanvaStatus("Diseno creado en Canva correctamente.", "success");
+  } catch (error) {
+    const errorMessage = `Error de conexion con Canva: ${error.message}`;
+    setCanvaStatus(errorMessage, "error");
+    setPreviewError(errorMessage);
   }
 }
 
@@ -237,10 +550,8 @@ function descargarPDF() {
 function normalizarTextoParaPdf(texto) {
   let limpio = String(texto || "");
 
-  // Normaliza caracteres Unicode compuestos
   limpio = limpio.normalize("NFKC");
 
-  // Elimina formato Markdown común
   limpio = limpio
     .replace(/\*\*/g, "")
     .replace(/__+/g, "")
@@ -248,7 +559,6 @@ function normalizarTextoParaPdf(texto) {
     .replace(/^>\s*/gm, "")
     .replace(/`/g, "");
 
-  // Reemplaza símbolos problemáticos por equivalentes seguros
   limpio = limpio
     .replace(/[•·●◦]/g, "-")
     .replace(/[–—]/g, "-")
@@ -256,15 +566,12 @@ function normalizarTextoParaPdf(texto) {
     .replace(/[‘’]/g, "'")
     .replace(/[Ø=ÜÞç]/g, " ");
 
-  // Corrige palabras que vienen letra por letra con espacios
   limpio = limpio.replace(/\b(?:[A-Za-z0-9@./:+_-]\s+){3,}[A-Za-z0-9@./:+_-]\b/g, (match) => {
     return match.replace(/\s+/g, "");
   });
 
-  // Quita caracteres no imprimibles fuera de rango latino básico
   limpio = limpio.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF]/g, " ");
 
-  // Normaliza espacios y saltos
   limpio = limpio
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -279,6 +586,9 @@ function normalizarTextoParaPdf(texto) {
 window.addEventListener("DOMContentLoaded", function() {
   cargarAPIKeyGuardada();
   cargarModeloGuardado();
+  cargarCanvaGuardado();
+  processCanvaCallback();
+  validateCanvaStatus();
 
   const modelSelect = document.getElementById("modeloSalida");
   if (modelSelect) {
