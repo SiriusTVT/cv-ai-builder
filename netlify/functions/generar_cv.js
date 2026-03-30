@@ -8,52 +8,52 @@ const HF_MODEL_CANDIDATES = [
 const HF_MODEL_SET = new Set(HF_MODEL_CANDIDATES);
 
 function construirPrompt(inputLibre) {
-  return `Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
+  return `Actua como un consultor senior de reclutamiento y redaccion de CVs ATS.
 
-Tu tarea es analizar, organizar y transformar informacion desordenada en una hoja de vida profesional, clara y atractiva.
+OBJETIVO:
+Convertir el texto del usuario en un CV completo, detallado y profesional, sin perder informacion relevante.
 
-INSTRUCCIONES:
+PRIORIDADES:
+1. No omitir datos del usuario: conserva toda informacion util.
+2. Reescribir con calidad profesional: claridad, impacto y lenguaje de accion.
+3. Estructura ATS: secciones claras, keywords, legibilidad.
 
-1. Analiza el texto proporcionado por el usuario (puede estar desordenado, incompleto o mal redactado).
-2. Extrae y organiza la informacion en estas secciones:
-   - Nombre
-   - Perfil profesional
-   - Experiencia
-   - Educacion
-   - Habilidades
-3. Si alguna seccion no esta clara:
-   - infierela inteligentemente sin inventar informacion falsa
-   - completa con redaccion profesional
-4. Mejora completamente la redaccion:
-   - usa lenguaje claro, profesional y persuasivo
-   - convierte descripciones simples en contenido profesional
-   - usa verbos de accion
-5. Optimiza para sistemas ATS:
-   - estructura clara
-   - palabras clave relevantes
-   - formato profesional
+SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
+- Name:
+- Age:
+- Professional title:
+- Professional summary:
+- Core strengths:
+- Work experience:
+- Projects:
+- Education:
+- Technical skills:
+- Courses and certifications:
+- Languages:
+- Contact:
+- Time availability:
+
+REGLAS DE DETALLE:
+- Professional summary: 6 a 9 lineas con enfoque en valor, dominio tecnico y tipo de impacto.
+- Work experience: por cada rol incluye empresa, cargo, periodo y entre 4 y 7 bullets de logros/responsabilidades.
+- Projects: incluye al menos 2 proyectos cuando existan datos; describe objetivo, stack y resultado.
+- Technical skills: agrupa por categorias (Programming, Data/BI, Databases, DevOps/Cloud, Tools).
+- Courses and certifications / Languages / Contact / Time availability: no las omitas.
+- Longitud objetivo: minimo 55 lineas utiles y salida extensa cuando haya datos suficientes.
+- Si falta un dato, escribe "No especificado por el candidato".
 
 TEXTO DEL USUARIO:
 """
 ${inputLibre}
 """
 
-SALIDA:
-Genera una hoja de vida estructurada con:
-- Nombre
-- Perfil profesional
-- Experiencia
-- Educacion
-- Habilidades
-
-Formato limpio, claro y listo para enviar.
-
-REGLAS DE FORMATO OBLIGATORIAS:
+FORMATO OBLIGATORIO:
 - Entrega en texto plano (sin Markdown).
 - No uses **, #, >, ni simbolos decorativos.
-- Usa solo encabezados simples con ":". Ejemplo: "Perfil profesional:".
-- Usa bullets con guion "-" para listar logros.
-- Evita caracteres raros o unicode no estandar.`;
+- Usa encabezados con ":" como en la lista obligatoria.
+- Usa bullets con "-".
+- Mantener redaccion limpia y profesional.
+- No inventar hechos falsos; solo inferencias prudentes cuando haga falta.`;
 }
 
 function makeResponse(statusCode, payload) {
@@ -164,7 +164,7 @@ exports.handler = async function handler(event) {
           }
         ],
         temperature: 0.4,
-        max_tokens: 700,
+        max_tokens: 1300,
         stream: false
       };
 

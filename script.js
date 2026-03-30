@@ -9,6 +9,24 @@ const MODEL_OPTIONS = [
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
 const TEMPLATE_OPTIONS = ["corporativo", "minimal", "creativo", "ejecutivo", "moderno", "academico"];
+const KNOWN_SECTION_DEFINITIONS = [
+  { id: "name", title: "Name", aliases: ["name", "nombre", "nombre completo"] },
+  { id: "age", title: "Age", aliases: ["age", "edad"] },
+  { id: "professional-title", title: "Professional title", aliases: ["professional title", "titulo profesional", "cargo", "profesion", "titulo"] },
+  { id: "professional-summary", title: "Professional summary", aliases: ["professional summary", "perfil profesional", "resumen"] },
+  { id: "core-strengths", title: "Core strengths", aliases: ["core strengths", "fortalezas", "strengths"] },
+  { id: "work-experience", title: "Work experience", aliases: ["work experience", "experiencia laboral", "experiencia"] },
+  { id: "projects", title: "Projects", aliases: ["projects", "proyectos"] },
+  { id: "education", title: "Education", aliases: ["education", "educacion", "formacion academica"] },
+  { id: "technical-skills", title: "Technical skills", aliases: ["technical skills", "habilidades tecnicas", "skills", "habilidades"] },
+  { id: "courses-certifications", title: "Courses and certifications", aliases: ["courses and certifications", "courses", "cursos", "certifications", "certificaciones"] },
+  { id: "languages", title: "Languages", aliases: ["languages", "idiomas", "lenguajes"] },
+  { id: "contact", title: "Contact", aliases: ["contact", "contacto"] },
+  { id: "time-availability", title: "Time availability", aliases: ["time availability", "availability", "disponibilidad"] }
+];
+const KNOWN_SECTION_ORDER = KNOWN_SECTION_DEFINITIONS.map(function(section) {
+  return section.id;
+});
 
 let latestCvText = "";
 let latestUsedModel = "";
@@ -297,132 +315,344 @@ function getNonEmptyLines(text) {
     .filter((line) => Boolean(line));
 }
 
-function getProfileData(rawText) {
-  const allLines = getNonEmptyLines(rawText);
-  const fields = {};
+function resolveKnownSectionDefinition(text) {
+  const normalized = normalizeFieldKey(cleanSectionTitle(text));
 
-  for (const line of allLines) {
-    const parsed = parseKeyValueLine(line);
-    if (!parsed) {
+  if (!normalized) {
+    return null;
+  }
+
+  for (const sectionDef of KNOWN_SECTION_DEFINITIONS) {
+    if (sectionDef.aliases.some((alias) => normalized === alias || normalized.includes(alias))) {
+      return sectionDef;
+    }
+  }
+
+  return null;
+}
+
+function sectionLinesToPlainLines(section) {
+  if (!section || !Array.isArray(section.lines)) {
+    return [];
+  }
+
+  const output = [];
+  for (const lineItem of section.lines) {
+    if (!lineItem) {
       continue;
     }
 
-    fields[normalizeFieldKey(parsed.key)] = parsed.value;
+    if (lineItem.type === "kv") {
+      output.push(`${lineItem.key}: ${lineItem.value}`);
+      continue;
+    }
+
+    output.push(lineItem.text || "");
   }
 
-  const contentCandidates = allLines
-    .map((line) => sanitizeDisplayLine(line))
-    .filter((line) => line && !isSectionHeading(line) && !/^[-*•]\s+/.test(line));
-
-  const name = fields.nombre
-    || fields.name
-    || fields["nombre completo"]
-    || contentCandidates[0]
-    || "Tu Nombre";
-
-  const headline = fields.cargo
-    || fields.profesion
-    || fields.perfil
-    || fields.titulo
-    || contentCandidates[1]
-    || "Perfil Profesional";
-
-  const summary = fields.resumen
-    || fields["perfil profesional"]
-    || contentCandidates.filter((line) => line !== name && line !== headline).slice(0, 2).join(" ")
-    || "Perfil orientado a resultados, con enfoque en impacto y mejora continua.";
-
-  return {
-    name: sanitizeDisplayLine(name),
-    headline: sanitizeDisplayLine(headline),
-    summary: sanitizeDisplayLine(summary)
-  };
+  return output.map((line) => sanitizeDisplayLine(line)).filter(Boolean);
 }
 
-function formatCvContentToHtml(rawText) {
+function buildStructuredSections(rawText) {
   const lines = String(rawText || "").split(/\r?\n/);
-  const htmlParts = [];
-  let sectionOpen = false;
-  let listOpen = false;
+  const knownSectionsById = new Map();
+  const extraSections = [];
+  let currentSection = null;
 
-  function closeList() {
-    if (listOpen) {
-      htmlParts.push("</ul>");
-      listOpen = false;
+  const summaryDef = KNOWN_SECTION_DEFINITIONS.find((section) => section.id === "professional-summary");
+
+  function ensureKnownSection(sectionDef) {
+    if (!sectionDef) {
+      return null;
     }
+
+    if (knownSectionsById.has(sectionDef.id)) {
+      return knownSectionsById.get(sectionDef.id);
+    }
+
+    const section = {
+      id: sectionDef.id,
+      title: sectionDef.title,
+      lines: []
+    };
+
+    knownSectionsById.set(sectionDef.id, section);
+    return section;
   }
 
-  function closeSection() {
-    closeList();
-    if (sectionOpen) {
-      htmlParts.push("</section>");
-      sectionOpen = false;
+  function ensureExtraSection(title) {
+    const cleanTitle = cleanSectionTitle(title || "") || "Informacion profesional";
+    const normalizedTitle = normalizeFieldKey(cleanTitle);
+
+    const existing = extraSections.find((section) => normalizeFieldKey(section.title) === normalizedTitle);
+    if (existing) {
+      return existing;
     }
+
+    const newSection = {
+      id: `extra-${extraSections.length + 1}`,
+      title: cleanTitle,
+      lines: []
+    };
+
+    extraSections.push(newSection);
+    return newSection;
   }
 
-  function openSection(title) {
-    closeSection();
-    htmlParts.push("<section>");
-    sectionOpen = true;
+  function openSectionFromHeading(title) {
+    const known = resolveKnownSectionDefinition(title);
+    if (known) {
+      currentSection = ensureKnownSection(known);
+      return;
+    }
 
-    if (title) {
-      htmlParts.push(`<h3>${escapeHtml(title)}</h3>`);
+    currentSection = ensureExtraSection(title);
+  }
+
+  function ensureDefaultSection() {
+    if (!currentSection) {
+      currentSection = ensureKnownSection(summaryDef) || ensureExtraSection("Informacion profesional");
     }
   }
 
   for (const rawLine of lines) {
     const trimmedRaw = String(rawLine || "").trim();
+
     if (!trimmedRaw) {
-      closeList();
       continue;
     }
 
     const markdownHeading = trimmedRaw.match(/^#{1,6}\s+(.+)/);
     if (markdownHeading) {
-      const heading = cleanSectionTitle(markdownHeading[1]);
-      openSection(heading);
+      openSectionFromHeading(markdownHeading[1]);
       continue;
     }
 
-    if (isSectionHeading(trimmedRaw)) {
-      const heading = cleanSectionTitle(trimmedRaw);
-      openSection(heading);
+    const keyValue = parseKeyValueLine(trimmedRaw);
+    const onlyHeadingWithColon = /:\s*$/.test(trimmedRaw) && !keyValue;
+
+    if (onlyHeadingWithColon || (isSectionHeading(trimmedRaw) && !keyValue)) {
+      openSectionFromHeading(trimmedRaw);
       continue;
     }
 
-    if (!sectionOpen) {
-      openSection("Informacion profesional");
+    if (keyValue) {
+      const knownKeyValueSection = resolveKnownSectionDefinition(keyValue.key);
+      if (knownKeyValueSection) {
+        currentSection = ensureKnownSection(knownKeyValueSection);
+        currentSection.lines.push({
+          type: "text",
+          text: sanitizeDisplayLine(keyValue.value)
+        });
+        continue;
+      }
     }
+
+    ensureDefaultSection();
 
     const bulletMatch = trimmedRaw.match(/^[-*•]\s+(.+)/);
     if (bulletMatch) {
-      if (!listOpen) {
-        htmlParts.push("<ul>");
-        listOpen = true;
-      }
-
-      htmlParts.push(`<li>${escapeHtml(sanitizeDisplayLine(bulletMatch[1]))}</li>`);
+      currentSection.lines.push({
+        type: "bullet",
+        text: sanitizeDisplayLine(bulletMatch[1])
+      });
       continue;
     }
 
-    closeList();
-
-    const keyValue = parseKeyValueLine(trimmedRaw);
     if (keyValue) {
-      htmlParts.push(`<p><strong>${escapeHtml(keyValue.key)}:</strong> ${escapeHtml(keyValue.value)}</p>`);
+      currentSection.lines.push({
+        type: "kv",
+        key: sanitizeDisplayLine(keyValue.key),
+        value: sanitizeDisplayLine(keyValue.value)
+      });
       continue;
     }
 
-    htmlParts.push(`<p>${escapeHtml(sanitizeDisplayLine(trimmedRaw))}</p>`);
+    currentSection.lines.push({
+      type: "text",
+      text: sanitizeDisplayLine(trimmedRaw)
+    });
   }
 
-  closeSection();
+  const orderedSections = [];
+  for (const sectionId of KNOWN_SECTION_ORDER) {
+    const section = knownSectionsById.get(sectionId);
+    if (section && section.lines.length) {
+      orderedSections.push(section);
+    }
+  }
 
-  if (!htmlParts.length) {
-    return "<section><p>No hay contenido para mostrar aun.</p></section>";
+  for (const section of extraSections) {
+    if (section.lines.length) {
+      orderedSections.push(section);
+    }
+  }
+
+  return orderedSections;
+}
+
+function getProfileData(rawText) {
+  const structuredSections = buildStructuredSections(rawText);
+  const sectionMap = new Map(structuredSections.map((section) => [section.id, section]));
+
+  const nameSection = sectionMap.get("name");
+  const ageSection = sectionMap.get("age");
+  const titleSection = sectionMap.get("professional-title");
+  const summarySection = sectionMap.get("professional-summary");
+  const strengthsSection = sectionMap.get("core-strengths");
+
+  const allPlainLines = structuredSections
+    .flatMap((section) => sectionLinesToPlainLines(section))
+    .filter(Boolean);
+
+  const name = sectionLinesToPlainLines(nameSection)[0]
+    || allPlainLines[0]
+    || "Tu Nombre";
+
+  const headline = sectionLinesToPlainLines(titleSection)[0]
+    || allPlainLines[1]
+    || "Perfil Profesional";
+
+  const summaryCandidates = [
+    ...sectionLinesToPlainLines(summarySection),
+    ...sectionLinesToPlainLines(strengthsSection)
+  ].filter(Boolean);
+
+  const summary = summaryCandidates.slice(0, 3).join(" ")
+    || "Perfil orientado a resultados, con enfoque en impacto y mejora continua.";
+
+  const age = sectionLinesToPlainLines(ageSection)[0] || "";
+
+  return {
+    name: sanitizeDisplayLine(name),
+    headline: sanitizeDisplayLine(headline),
+    summary: sanitizeDisplayLine(summary),
+    age: sanitizeDisplayLine(age)
+  };
+}
+
+function formatCvContentToHtml(rawText) {
+  const sections = buildStructuredSections(rawText);
+
+  if (!sections.length) {
+    return "<section><h3>Informacion profesional</h3><p>No hay contenido para mostrar aun.</p></section>";
+  }
+
+  const htmlParts = [];
+
+  for (const section of sections) {
+    htmlParts.push(`<section data-section="${escapeHtml(section.id)}">`);
+    htmlParts.push(`<h3>${escapeHtml(section.title)}</h3>`);
+
+    let listOpen = false;
+    for (const lineItem of section.lines) {
+      if (lineItem.type === "bullet") {
+        if (!listOpen) {
+          htmlParts.push("<ul>");
+          listOpen = true;
+        }
+
+        htmlParts.push(`<li>${escapeHtml(lineItem.text)}</li>`);
+        continue;
+      }
+
+      if (listOpen) {
+        htmlParts.push("</ul>");
+        listOpen = false;
+      }
+
+      if (lineItem.type === "kv") {
+        htmlParts.push(`<p><strong>${escapeHtml(lineItem.key)}:</strong> ${escapeHtml(lineItem.value)}</p>`);
+        continue;
+      }
+
+      htmlParts.push(`<p>${escapeHtml(lineItem.text)}</p>`);
+    }
+
+    if (listOpen) {
+      htmlParts.push("</ul>");
+    }
+
+    htmlParts.push("</section>");
   }
 
   return htmlParts.join("");
+}
+
+function splitCorporateContent(contentHtml) {
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = String(contentHtml || "");
+
+  const sectionNodes = Array.from(wrapper.querySelectorAll("section"));
+  if (!sectionNodes.length) {
+    return {
+      sidebarHtml: "",
+      mainHtml: String(contentHtml || "")
+    };
+  }
+
+  const sidebarKeywords = [
+    "core strengths",
+    "fortalezas",
+    "habilidades",
+    "skills",
+    "technical",
+    "tecnic",
+    "tecnolog",
+    "idiomas",
+    "languages",
+    "lenguajes",
+    "cursos",
+    "courses",
+    "certificaciones",
+    "certifications",
+    "contacto",
+    "contact",
+    "disponibilidad"
+  ];
+
+  const heroSectionKeys = ["name", "age", "professional-title", "professional-summary"];
+  const sidebarSectionKeys = [
+    "core-strengths",
+    "technical-skills",
+    "courses-certifications",
+    "languages",
+    "contact",
+    "time-availability"
+  ];
+
+  const sidebarParts = [];
+  const mainParts = [];
+
+  for (const sectionNode of sectionNodes) {
+    const cloned = sectionNode.cloneNode(true);
+    const headingNode = cloned.querySelector("h3");
+    const title = headingNode ? normalizeFieldKey(headingNode.textContent || "") : "";
+    const sectionKey = normalizeFieldKey(cloned.getAttribute("data-section") || "");
+
+    if (heroSectionKeys.includes(sectionKey)) {
+      continue;
+    }
+
+    const isSidebarByKey = sidebarSectionKeys.includes(sectionKey);
+    const isSidebarByTitle = sidebarKeywords.some((keyword) => title.includes(keyword));
+    const isSidebar = isSidebarByKey || isSidebarByTitle;
+
+    if (isSidebar) {
+      sidebarParts.push(cloned.outerHTML);
+    } else {
+      mainParts.push(cloned.outerHTML);
+    }
+  }
+
+  if (!mainParts.length && sidebarParts.length) {
+    mainParts.push(sidebarParts.shift());
+  }
+
+  return {
+    sidebarHtml: sidebarParts.join(""),
+    mainHtml: mainParts.join("") || String(contentHtml || "")
+  };
 }
 
 function buildTemplateMarkup(rawText, modelUsed) {
@@ -529,21 +759,37 @@ function buildTemplateMarkup(rawText, modelUsed) {
     `;
   }
 
+  const corporateContent = splitCorporateContent(contentHtml);
+  const sidebarFallback = `
+    <section>
+      <h3>Core strengths</h3>
+      <ul>
+        <li>${escapeHtml(profile.summary || "Perfil orientado a resultados")}</li>
+      </ul>
+    </section>
+  `;
+
+  const ageBlock = profile.age
+    ? `<p class="tpl-age">${escapeHtml(profile.age)}</p>`
+    : "";
+
   return `
     <article class="cv-template template-corporativo">
       <aside class="tpl-sidebar">
         <img class="tpl-photo" src="${escapeHtml(imageUrl)}" alt="Foto de perfil">
-        <h2 class="tpl-name">${escapeHtml(profile.name)}</h2>
-        <p class="tpl-headline">${escapeHtml(profile.headline)}</p>
-        <p class="tpl-summary">${escapeHtml(profile.summary)}</p>
+        <div class="tpl-side-content cv-output">
+          ${corporateContent.sidebarHtml || sidebarFallback}
+        </div>
       </aside>
       <section class="tpl-main">
-        <header class="tpl-main-header">
-          <h3>Curriculum Vitae</h3>
+        <header class="tpl-hero">
+          <h2 class="tpl-name">${escapeHtml(profile.name)}</h2>
+          ${ageBlock}
+          <p class="tpl-headline">${escapeHtml(profile.headline)}</p>
           ${modelBadge}
         </header>
-        <div class="tpl-content cv-output">
-          ${contentHtml}
+        <div class="tpl-content tpl-main-content cv-output">
+          ${corporateContent.mainHtml}
         </div>
       </section>
     </article>

@@ -215,36 +215,188 @@ button:not(.btn-secondary):hover {
   margin-bottom: 6px;
 }
 
+.template-minimal .tpl-content,
+.template-creativo .tpl-content,
+.template-ejecutivo .tpl-content,
+.template-moderno .tpl-content,
+.template-academico .tpl-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.template-minimal .tpl-content section,
+.template-ejecutivo .tpl-content section,
+.template-moderno .tpl-content section,
+.template-academico .tpl-content section {
+  margin: 0;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #d5dbe6;
+  background: #ffffff;
+  height: 100%;
+}
+
+.template-creativo .tpl-content section {
+  height: 100%;
+}
+
 .template-corporativo {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 44% 56%;
+  border: 1px solid #cac6c8;
+  background: #efeded;
 }
 
 .template-corporativo .tpl-sidebar {
-  background: #0f172a;
-  color: #f8fafc;
-  padding: 24px;
-  text-align: center;
+  background: #ded9dc;
+  color: #1f2937;
+  padding: 26px 20px;
 }
 
 .template-corporativo .tpl-main {
-  padding: 26px;
+  background: #f7f7f8;
+  padding: 26px 22px;
 }
 
-.template-corporativo .tpl-main-header {
+.template-corporativo .tpl-hero {
   margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #d4d8e0;
+  padding-bottom: 10px;
+  border-bottom: 3px solid #6b6f76;
 }
 
-.template-corporativo .tpl-main-header h3 {
+.template-corporativo .tpl-photo {
+  width: 196px;
+  height: 196px;
+  border-radius: 999px;
+  object-fit: cover;
+  display: block;
+  margin: 0 auto 18px;
+  border: 4px solid #eceff3;
+  background: #d1d5db;
+}
+
+.template-corporativo .tpl-hero .tpl-name {
   margin: 0;
-  font-size: 22px;
-  color: #0b1730;
+  font-size: 42px;
+  line-height: 1.08;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #2c2f36;
 }
 
-.template-corporativo .tpl-photo,
-.template-minimal .tpl-photo {
+.template-corporativo .tpl-hero .tpl-age {
+  margin: 6px 0 0;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 800;
+  color: #0b0d11;
+}
+
+.template-corporativo .tpl-hero .tpl-headline {
+  margin: 8px 0 0;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-style: italic;
+  color: #374151;
+}
+
+.template-corporativo .tpl-side-content section,
+.template-corporativo .tpl-main-content section {
+  border: 0;
+  padding: 0;
+  margin: 0 0 18px;
+}
+
+.template-corporativo .tpl-side-content h3,
+.template-corporativo .tpl-main-content h3 {
+  margin: 0 0 9px;
+  font-size: 17px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #101622;
+}
+
+.template-corporativo .tpl-side-content p,
+.template-corporativo .tpl-main-content p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.54;
+  color: #242d3a;
+}
+
+.template-corporativo .tpl-side-content ul,
+.template-corporativo .tpl-main-content ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.template-corporativo .tpl-side-content li,
+.template-corporativo .tpl-main-content li {
+  margin-bottom: 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #202938;
+}
+
+.template-corporativo .tpl-model {
+  margin-top: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #1f2a60;
+}
+
+.template-corporativo .tpl-main-content {
+  padding: 0;
+}
+
+.template-corporativo .tpl-side-content {
+  padding: 0;
+}
+
+.template-corporativo .tpl-main-content section:last-child,
+.template-corporativo .tpl-side-content section:last-child {
+  margin-bottom: 0;
+}
+
+.template-corporativo .tpl-main-content p strong,
+.template-corporativo .tpl-side-content p strong {
+  color: #0f172a;
+}
+
+.template-corporativo .tpl-main-content h3 {
+  padding-top: 2px;
+}
+
+.template-corporativo .tpl-main-content {
+  border-top: 0;
+}
+
+.template-corporativo .tpl-main-content section {
+  border-bottom: 0;
+}
+
+.template-corporativo .tpl-side-content section {
+  border-bottom: 0;
+}
+
+.template-corporativo .tpl-main .tpl-content {
+  padding: 0;
+}
+
+.template-corporativo .tpl-side-content h3 {
+  font-size: 16px;
+}
+
+.template-corporativo .tpl-main-content h3 {
+  margin: 0;
+  font-size: 19px;
+  color: #111827;
+}
+
+.template-minimal .tpl-photo,
+.template-ejecutivo .tpl-photo,
+.template-academico .tpl-photo {
   width: 110px;
   height: 110px;
   border-radius: 999px;
@@ -253,23 +405,29 @@ button:not(.btn-secondary):hover {
   background: #d1d5db;
 }
 
-.template-corporativo .tpl-name,
 .template-minimal .tpl-name,
-.template-creativo .tpl-name {
+.template-creativo .tpl-name,
+.template-ejecutivo .tpl-name,
+.template-moderno .tpl-name,
+.template-academico .tpl-name {
   margin: 10px 0 8px;
   font-size: 24px;
 }
 
-.template-corporativo .tpl-headline,
 .template-minimal .tpl-headline,
-.template-creativo .tpl-headline {
+.template-creativo .tpl-headline,
+.template-ejecutivo .tpl-headline,
+.template-moderno .tpl-headline,
+.template-academico .tpl-headline {
   margin: 0 0 10px;
   font-weight: 600;
 }
 
-.template-corporativo .tpl-summary {
+.template-ejecutivo .tpl-summary,
+.template-moderno .tpl-summary,
+.template-academico .tpl-summary {
   margin: 0;
-  color: #cbd5e1;
+  color: #334155;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -340,6 +498,7 @@ button:not(.btn-secondary):hover {
   border-radius: 12px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.9);
+  margin: 0;
 }
 
 .template-ejecutivo {
@@ -410,8 +569,10 @@ button:not(.btn-secondary):hover {
 }
 
 .template-moderno .tpl-content section {
-  padding-bottom: 12px;
-  border-bottom: 1px dashed #bbd3c6;
+  border: 1px dashed #bbd3c6;
+  padding: 14px;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .template-academico {
@@ -459,9 +620,43 @@ button:not(.btn-secondary):hover {
     grid-template-columns: 1fr;
   }
 
+  .template-corporativo .tpl-sidebar {
+    padding-bottom: 20px;
+  }
+
+  .template-corporativo .tpl-photo {
+    width: 150px;
+    height: 150px;
+  }
+
+  .template-corporativo .tpl-main {
+    padding-top: 18px;
+  }
+
+  .template-corporativo .tpl-hero .tpl-name {
+    font-size: 30px;
+  }
+
+  .template-corporativo .tpl-hero .tpl-age {
+    font-size: 24px;
+  }
+
+  .template-corporativo .tpl-hero .tpl-headline {
+    letter-spacing: 1.8px;
+    font-size: 14px;
+  }
+
   .template-creativo .tpl-banner {
     grid-template-columns: 1fr;
     text-align: center;
+  }
+
+  .template-minimal .tpl-content,
+  .template-creativo .tpl-content,
+  .template-ejecutivo .tpl-content,
+  .template-moderno .tpl-content,
+  .template-academico .tpl-content {
+    grid-template-columns: 1fr;
   }
 
   .template-creativo .tpl-photo-square {
