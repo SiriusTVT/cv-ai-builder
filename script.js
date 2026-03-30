@@ -1,3 +1,12 @@
+const MODEL_STORAGE_KEY = "hf_model_selected";
+const MODEL_OPTIONS = [
+  "auto",
+  "google/gemma-2-2b-it:fastest",
+  "openai/gpt-oss-20b:fastest",
+  "openai/gpt-oss-120b:fastest",
+  "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
+];
+
 function getSavedApiKey() {
   return localStorage.getItem("hf_api_key") || "";
 }
@@ -6,6 +15,37 @@ function setSavedApiKey(apiKey) {
   localStorage.setItem("hf_api_key", apiKey);
   localStorage.removeItem("replicate_api_key");
   localStorage.removeItem("gemini_api_key");
+}
+
+function getSelectedModel() {
+  const select = document.getElementById("modeloSalida");
+  const value = select ? select.value : "auto";
+  return MODEL_OPTIONS.includes(value) ? value : "auto";
+}
+
+function setSelectedModel(value) {
+  const safeValue = MODEL_OPTIONS.includes(value) ? value : "auto";
+  localStorage.setItem(MODEL_STORAGE_KEY, safeValue);
+}
+
+function cargarModeloGuardado() {
+  const savedModel = localStorage.getItem(MODEL_STORAGE_KEY);
+  const select = document.getElementById("modeloSalida");
+
+  if (!select) {
+    return;
+  }
+
+  if (savedModel && MODEL_OPTIONS.includes(savedModel)) {
+    select.value = savedModel;
+  } else {
+    select.value = "auto";
+    setSelectedModel("auto");
+  }
+}
+
+function guardarModeloSeleccionado() {
+  setSelectedModel(getSelectedModel());
 }
 
 function maskApiKey(apiKey) {
@@ -73,6 +113,7 @@ function guardarAPIKey() {
 async function generarCV() {
   const apiKey = getSavedApiKey();
   const inputLibre = document.getElementById("inputLibre").value.trim();
+  const requestedModel = getSelectedModel();
   const preview = document.getElementById("preview");
 
   if (!apiKey) {
@@ -85,6 +126,7 @@ async function generarCV() {
     return;
   }
 
+  setSelectedModel(requestedModel);
   preview.innerHTML = "<p>Generando CV profesional...</p>";
 
   try {
@@ -99,7 +141,8 @@ async function generarCV() {
       },
       body: JSON.stringify({
         apiKey,
-        inputLibre
+        inputLibre,
+        requestedModel
       })
     });
 
@@ -118,8 +161,13 @@ async function generarCV() {
       return;
     }
 
+    const modeloUsado = data.modelo
+      ? `<p class="model-used">Modelo usado: ${escapeHtml(data.modelo)}</p>`
+      : "";
+
     preview.innerHTML = `
       <h2>Hoja de Vida Generada</h2>
+      ${modeloUsado}
       <div class="cv-output">${escapeHtml(data.texto || "").replace(/\n/g, "<br>")}</div>
     `;
   } catch (error) {
@@ -228,4 +276,12 @@ function normalizarTextoParaPdf(texto) {
   return limpio;
 }
 
-window.addEventListener("DOMContentLoaded", cargarAPIKeyGuardada);
+window.addEventListener("DOMContentLoaded", function() {
+  cargarAPIKeyGuardada();
+  cargarModeloGuardado();
+
+  const modelSelect = document.getElementById("modeloSalida");
+  if (modelSelect) {
+    modelSelect.addEventListener("change", guardarModeloSeleccionado);
+  }
+});

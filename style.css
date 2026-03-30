@@ -16,7 +16,7 @@ body {
   border-radius: 10px;
 }
 
-textarea, input {
+textarea, input, select {
   width: 100%;
   margin-bottom: 10px;
   padding: 10px;
@@ -35,6 +35,18 @@ textarea, input {
   margin: 0 0 12px;
   color: #555;
   font-size: 13px;
+}
+
+.model-config {
+  margin-bottom: 12px;
+}
+
+.model-config label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
 }
 
 hr {
@@ -124,6 +136,12 @@ button:not(.btn-secondary):hover {
 .cv-output {
   white-space: pre-wrap;
   line-height: 1.5;
+}
+
+.model-used {
+  margin: 0 0 10px;
+  color: #3a3a3a;
+  font-size: 13px;
 }
 
 @media (max-width: 900px) {

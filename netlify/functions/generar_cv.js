@@ -5,6 +5,7 @@ const HF_MODEL_CANDIDATES = [
   "openai/gpt-oss-120b:fastest",
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
+const HF_MODEL_SET = new Set(HF_MODEL_CANDIDATES);
 
 function construirPrompt(inputLibre) {
   return `Actua como un experto en reclutamiento, redaccion profesional y optimizacion de hojas de vida (ATS).
@@ -95,6 +96,25 @@ function isModelNotSupported(errorMsg) {
   return normalized.includes("not supported by any provider") || normalized.includes("model_not_supported");
 }
 
+function resolveModelSequence(requestedModel) {
+  const normalized = String(requestedModel || "auto").trim();
+
+  if (!normalized || normalized === "auto") {
+    return { modelSequence: [...HF_MODEL_CANDIDATES], modelError: null, normalizedRequestedModel: "auto" };
+  }
+
+  if (HF_MODEL_SET.has(normalized)) {
+    return { modelSequence: [normalized], modelError: null, normalizedRequestedModel: normalized };
+  }
+
+  const allowedValues = HF_MODEL_CANDIDATES.join(", ");
+  return {
+    modelSequence: null,
+    modelError: `Modelo no valido. Opciones: auto, ${allowedValues}`,
+    normalizedRequestedModel: normalized
+  };
+}
+
 exports.handler = async function handler(event) {
   if (event.httpMethod === "OPTIONS") {
     return makeResponse(204, {});
@@ -108,6 +128,7 @@ exports.handler = async function handler(event) {
     const body = JSON.parse(event.body || "{}");
     const hfApiKey = String(body.apiKey || "").trim();
     const inputLibre = String(body.inputLibre || "").trim();
+    const requestedModel = String(body.requestedModel || "auto").trim();
 
     if (!hfApiKey) {
       return makeResponse(400, { success: false, error: "Token de Hugging Face requerido" });
@@ -117,6 +138,11 @@ exports.handler = async function handler(event) {
       return makeResponse(400, { success: false, error: "Debes ingresar informacion en el cuadro de texto" });
     }
 
+    const { modelSequence, modelError, normalizedRequestedModel } = resolveModelSequence(requestedModel);
+    if (modelError) {
+      return makeResponse(400, { success: false, error: modelError });
+    }
+
     const headers = {
       Authorization: `Bearer ${hfApiKey}`,
       "Content-Type": "application/json"
@@ -124,7 +150,7 @@ exports.handler = async function handler(event) {
 
     let lastModelError = "";
 
-    for (const model of HF_MODEL_CANDIDATES) {
+    for (const model of modelSequence) {
       const payload = {
         model,
         messages: [
@@ -158,7 +184,7 @@ exports.handler = async function handler(event) {
 
       if (!response.ok) {
         const errorMsg = parseHfError(data, response.status, responseText);
-        if (isModelNotSupported(errorMsg)) {
+        if (normalizedRequestedModel === "auto" && isModelNotSupported(errorMsg)) {
           lastModelError = errorMsg;
           continue;
         }
@@ -179,6 +205,13 @@ exports.handler = async function handler(event) {
     }
 
     if (lastModelError) {
+      if (normalizedRequestedModel !== "auto") {
+        return makeResponse(400, {
+          success: false,
+          error: `El modelo seleccionado no genero una salida valida. Detalle: ${lastModelError}`
+        });
+      }
+
       return makeResponse(400, {
         success: false,
         error: `No hay modelos compatibles con tus providers habilitados. Detalle: ${lastModelError}`

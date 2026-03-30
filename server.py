@@ -12,6 +12,7 @@ HF_MODEL_CANDIDATES = [
     "openai/gpt-oss-120b:fastest",
     "Qwen/Qwen2.5-7B-Instruct-1M:fastest",
 ]
+HF_MODEL_SET = set(HF_MODEL_CANDIDATES)
 
 
 def construir_prompt(input_libre):
@@ -87,6 +88,19 @@ def is_model_not_supported(error_msg):
     return "not supported by any provider" in normalized or "model_not_supported" in normalized
 
 
+def resolve_model_sequence(requested_model):
+    normalized = str(requested_model or "auto").strip()
+
+    if not normalized or normalized == "auto":
+        return list(HF_MODEL_CANDIDATES), None, "auto"
+
+    if normalized in HF_MODEL_SET:
+        return [normalized], None, normalized
+
+    allowed_values = ", ".join(HF_MODEL_CANDIDATES)
+    return None, f"Modelo no valido. Opciones: auto, {allowed_values}", normalized
+
+
 @app.route("/api/generar-cv", methods=["POST"])
 def generar_cv():
     try:
@@ -94,12 +108,17 @@ def generar_cv():
 
         hf_api_key = str(data.get("apiKey", "")).strip()
         input_libre = str(data.get("inputLibre", "")).strip()
+        requested_model = str(data.get("requestedModel", "auto")).strip()
 
         if not hf_api_key:
             return jsonify({"success": False, "error": "Token de Hugging Face requerido"}), 400
 
         if not input_libre:
             return jsonify({"success": False, "error": "Debes ingresar informacion en el cuadro de texto"}), 400
+
+        model_sequence, model_error, normalized_requested_model = resolve_model_sequence(requested_model)
+        if model_error:
+            return jsonify({"success": False, "error": model_error}), 400
 
         headers = {
             "Authorization": f"Bearer {hf_api_key}",
@@ -108,7 +127,7 @@ def generar_cv():
 
         last_model_error = ""
 
-        for model in HF_MODEL_CANDIDATES:
+        for model in model_sequence:
             payload = {
                 "model": model,
                 "messages": [
@@ -130,7 +149,7 @@ def generar_cv():
 
             if response.status_code != 200:
                 error_msg = parse_hf_error(response)
-                if is_model_not_supported(error_msg):
+                if normalized_requested_model == "auto" and is_model_not_supported(error_msg):
                     last_model_error = error_msg
                     continue
                 return jsonify({"success": False, "error": f"Error en Hugging Face: {error_msg}"}), 400
@@ -151,9 +170,15 @@ def generar_cv():
             return jsonify({"success": True, "texto": texto, "modelo": model})
 
         if last_model_error:
+            if normalized_requested_model == "auto":
+                return jsonify({
+                    "success": False,
+                    "error": f"No hay modelos compatibles con tus providers habilitados. Detalle: {last_model_error}",
+                }), 400
+
             return jsonify({
                 "success": False,
-                "error": f"No hay modelos compatibles con tus providers habilitados. Detalle: {last_model_error}",
+                "error": f"El modelo seleccionado no genero una salida valida. Detalle: {last_model_error}",
             }), 400
 
         return jsonify({"success": False, "error": "No se pudo completar la solicitud con ningun modelo"}), 500

@@ -25,6 +25,17 @@
       <textarea id="inputLibre" class="raw-input" placeholder="Pega aquí toda tu información (nombre, experiencia, estudios, habilidades, logros, etc.). La IA la organizará automáticamente en un CV profesional."></textarea>
       <small class="helper-text">Ejemplo: "Soy Ana, desarrolladora frontend con 3 años de experiencia en React..."</small>
 
+      <div class="model-config">
+        <label for="modeloSalida">Modelo de IA</label>
+        <select id="modeloSalida">
+          <option value="auto" selected>Auto (recomendado)</option>
+          <option value="google/gemma-2-2b-it:fastest">Gemma 2 2B (rapido y economico)</option>
+          <option value="openai/gpt-oss-20b:fastest">GPT-OSS 20B (equilibrado)</option>
+          <option value="openai/gpt-oss-120b:fastest">GPT-OSS 120B (mayor calidad)</option>
+          <option value="Qwen/Qwen2.5-7B-Instruct-1M:fastest">Qwen 2.5 7B (contexto largo)</option>
+        </select>
+      </div>
+
       <button onclick="generarCV()">Generar con IA</button>
       <button onclick="descargarPDF()">Descargar PDF</button>
     </div>
