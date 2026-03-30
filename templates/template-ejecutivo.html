@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plantilla CV Ejecutivo</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #334155;
+      --surface: #ffffff;
+      --line: #d3dce9;
+      --panel: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+      color: var(--ink);
+    }
+
+    .sheet {
+      max-width: 980px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 42px rgba(2, 6, 23, 0.12);
+    }
+
+    .head {
+      padding: 24px;
+      background: linear-gradient(120deg, #0f172a, #1e293b);
+      color: #f8fafc;
+    }
+
+    .head h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .head p {
+      margin: 8px 0 0;
+      color: #dbeafe;
+    }
+
+    .body {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+    }
+
+    .side {
+      padding: 20px;
+      background: #f4f7fc;
+      border-right: 1px solid var(--line);
+      text-align: center;
+    }
+
+    .photo {
+      width: 120px;
+      height: 120px;
+      border-radius: 999px;
+      object-fit: cover;
+      border: 3px solid #cbd5e1;
+      background: #d1d5db;
+    }
+
+    .summary {
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .content {
+      padding: 24px;
+      line-height: 1.65;
+    }
+
+    .content h2,
+    .content h3 {
+      margin: 0 0 10px;
+      color: #0b1730;
+    }
+
+    .content p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .content ul {
+      margin: 0 0 12px;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .content li {
+      margin-bottom: 6px;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        padding: 10px;
+      }
+
+      .body {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <article class="sheet">
+    <header class="head">
+      <h1>CV Ejecutivo</h1>
+      <p>Estilo premium para roles de liderazgo y gestion.</p>
+    </header>
+
+    <div class="body">
+      <aside class="side">
+        <img class="photo" src="{{IMAGE_URL}}" alt="Foto profesional">
+        <p class="summary">Perfil estrategico orientado a resultados medibles.</p>
+      </aside>
+
+      <main class="content">
+        {{CV_CONTENT}}
+      </main>
+    </div>
+  </article>
+</body>
+</html>

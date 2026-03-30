@@ -8,7 +8,7 @@ const MODEL_OPTIONS = [
   "openai/gpt-oss-120b:fastest",
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
-const TEMPLATE_OPTIONS = ["corporativo", "minimal", "creativo"];
+const TEMPLATE_OPTIONS = ["corporativo", "minimal", "creativo", "ejecutivo", "moderno", "academico"];
 
 let latestCvText = "";
 let latestUsedModel = "";
@@ -120,32 +120,72 @@ function stripMarkdownDecorators(line) {
     .trim();
 }
 
+function sanitizeDisplayLine(line) {
+  return stripMarkdownDecorators(line)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanSectionTitle(line) {
+  const output = sanitizeDisplayLine(line);
+  if (output.endsWith(":")) {
+    return output.slice(0, -1).trim();
+  }
+
+  return output;
+}
+
 function isSectionHeading(line) {
-  const clean = stripMarkdownDecorators(line);
+  const raw = String(line || "").trim();
+  const clean = sanitizeDisplayLine(raw);
 
   if (!clean) {
     return false;
   }
 
-  return /^([A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ][A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ()/&.,\-\s]{2,}):$/.test(clean)
-    || /^[A-ZÁÉÍÓÚÜÑ0-9][A-ZÁÉÍÓÚÜÑ0-9\s]{3,}$/.test(clean);
+  if (/^#{1,6}\s+/.test(raw)) {
+    return true;
+  }
+
+  const uppercaseHeading = /^[A-ZÁÉÍÓÚÜÑ0-9][A-ZÁÉÍÓÚÜÑ0-9\s]{2,}$/.test(clean) && clean.length <= 80;
+  if (uppercaseHeading) {
+    return true;
+  }
+
+  const endsWithColon = clean.endsWith(":");
+  if (!endsWithColon || clean.length > 80) {
+    return false;
+  }
+
+  const withoutColon = clean.slice(0, -1).trim();
+  const words = withoutColon.split(/\s+/).filter(Boolean);
+  if (words.length > 7) {
+    return false;
+  }
+
+  return !/[,.!?]/.test(withoutColon);
 }
 
-function cleanLineForDisplay(line, maxLength) {
-  let output = stripMarkdownDecorators(line)
-    .replace(/^[-*•]\s+/, "")
-    .replace(/\s+/g, " ")
+function parseKeyValueLine(line) {
+  const normalized = sanitizeDisplayLine(line);
+  const match = normalized.match(/^([^:]{1,40}):\s+(.+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    key: match[1].trim(),
+    value: match[2].trim()
+  };
+}
+
+function normalizeFieldKey(text) {
+  return String(text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim();
-
-  if (output.endsWith(":")) {
-    output = output.slice(0, -1).trim();
-  }
-
-  if (maxLength && output.length > maxLength) {
-    return `${output.slice(0, maxLength - 1).trim()}...`;
-  }
-
-  return output;
 }
 
 function getTemplateLabel(templateValue) {
@@ -155,6 +195,18 @@ function getTemplateLabel(templateValue) {
 
   if (templateValue === "creativo") {
     return "Creativo en tarjetas";
+  }
+
+  if (templateValue === "ejecutivo") {
+    return "Ejecutivo premium";
+  }
+
+  if (templateValue === "moderno") {
+    return "Moderno editorial";
+  }
+
+  if (templateValue === "academico") {
+    return "Academico formal";
   }
 
   return "Corporativo (sidebar)";
@@ -246,20 +298,44 @@ function getNonEmptyLines(text) {
 }
 
 function getProfileData(rawText) {
-  const candidates = getNonEmptyLines(rawText)
-    .map((line) => stripMarkdownDecorators(line))
+  const allLines = getNonEmptyLines(rawText);
+  const fields = {};
+
+  for (const line of allLines) {
+    const parsed = parseKeyValueLine(line);
+    if (!parsed) {
+      continue;
+    }
+
+    fields[normalizeFieldKey(parsed.key)] = parsed.value;
+  }
+
+  const contentCandidates = allLines
+    .map((line) => sanitizeDisplayLine(line))
     .filter((line) => line && !isSectionHeading(line) && !/^[-*•]\s+/.test(line));
 
-  const name = cleanLineForDisplay(candidates[0] || "Tu Nombre", 60) || "Tu Nombre";
-  const headline = cleanLineForDisplay(candidates[1] || "Perfil Profesional", 90) || "Perfil Profesional";
+  const name = fields.nombre
+    || fields.name
+    || fields["nombre completo"]
+    || contentCandidates[0]
+    || "Tu Nombre";
 
-  const summarySource = candidates.find((line) => line.length >= 30) || "Perfil orientado a resultados, con enfoque en impacto y mejora continua.";
-  const summary = cleanLineForDisplay(summarySource, 180) || "Perfil orientado a resultados, con enfoque en impacto y mejora continua.";
+  const headline = fields.cargo
+    || fields.profesion
+    || fields.perfil
+    || fields.titulo
+    || contentCandidates[1]
+    || "Perfil Profesional";
+
+  const summary = fields.resumen
+    || fields["perfil profesional"]
+    || contentCandidates.filter((line) => line !== name && line !== headline).slice(0, 2).join(" ")
+    || "Perfil orientado a resultados, con enfoque en impacto y mejora continua.";
 
   return {
-    name,
-    headline,
-    summary
+    name: sanitizeDisplayLine(name),
+    headline: sanitizeDisplayLine(headline),
+    summary: sanitizeDisplayLine(summary)
   };
 }
 
@@ -295,36 +371,49 @@ function formatCvContentToHtml(rawText) {
   }
 
   for (const rawLine of lines) {
-    const strippedLine = stripMarkdownDecorators(rawLine);
-
-    if (!strippedLine) {
+    const trimmedRaw = String(rawLine || "").trim();
+    if (!trimmedRaw) {
       closeList();
       continue;
     }
 
-    if (isSectionHeading(strippedLine)) {
-      const heading = cleanLineForDisplay(strippedLine, 80);
+    const markdownHeading = trimmedRaw.match(/^#{1,6}\s+(.+)/);
+    if (markdownHeading) {
+      const heading = cleanSectionTitle(markdownHeading[1]);
+      openSection(heading);
+      continue;
+    }
+
+    if (isSectionHeading(trimmedRaw)) {
+      const heading = cleanSectionTitle(trimmedRaw);
       openSection(heading);
       continue;
     }
 
     if (!sectionOpen) {
-      openSection("");
+      openSection("Informacion profesional");
     }
 
-    const bulletMatch = strippedLine.match(/^[-*•]\s+(.+)/);
+    const bulletMatch = trimmedRaw.match(/^[-*•]\s+(.+)/);
     if (bulletMatch) {
       if (!listOpen) {
         htmlParts.push("<ul>");
         listOpen = true;
       }
 
-      htmlParts.push(`<li>${escapeHtml(cleanLineForDisplay(bulletMatch[1], 420))}</li>`);
+      htmlParts.push(`<li>${escapeHtml(sanitizeDisplayLine(bulletMatch[1]))}</li>`);
       continue;
     }
 
     closeList();
-    htmlParts.push(`<p>${escapeHtml(cleanLineForDisplay(strippedLine, 620))}</p>`);
+
+    const keyValue = parseKeyValueLine(trimmedRaw);
+    if (keyValue) {
+      htmlParts.push(`<p><strong>${escapeHtml(keyValue.key)}:</strong> ${escapeHtml(keyValue.value)}</p>`);
+      continue;
+    }
+
+    htmlParts.push(`<p>${escapeHtml(sanitizeDisplayLine(trimmedRaw))}</p>`);
   }
 
   closeSection();
@@ -373,6 +462,66 @@ function buildTemplateMarkup(rawText, modelUsed) {
             ${modelBadge}
           </div>
         </header>
+        <div class="tpl-content cv-output">
+          ${contentHtml}
+        </div>
+      </article>
+    `;
+  }
+
+  if (selectedTemplate === "ejecutivo") {
+    return `
+      <article class="cv-template template-ejecutivo">
+        <header class="tpl-executive-header">
+          <h2 class="tpl-name">${escapeHtml(profile.name)}</h2>
+          <p class="tpl-headline">${escapeHtml(profile.headline)}</p>
+          ${modelBadge}
+        </header>
+        <div class="tpl-executive-body">
+          <aside class="tpl-executive-aside">
+            <img class="tpl-photo" src="${escapeHtml(imageUrl)}" alt="Foto de perfil">
+            <p class="tpl-summary">${escapeHtml(profile.summary)}</p>
+          </aside>
+          <div class="tpl-content cv-output">
+            ${contentHtml}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  if (selectedTemplate === "moderno") {
+    return `
+      <article class="cv-template template-moderno">
+        <header class="tpl-modern-header">
+          <div>
+            <h2 class="tpl-name">${escapeHtml(profile.name)}</h2>
+            <p class="tpl-headline">${escapeHtml(profile.headline)}</p>
+            <p class="tpl-summary">${escapeHtml(profile.summary)}</p>
+            ${modelBadge}
+          </div>
+          <img class="tpl-photo-square" src="${escapeHtml(imageUrl)}" alt="Foto de perfil">
+        </header>
+        <div class="tpl-content cv-output">
+          ${contentHtml}
+        </div>
+      </article>
+    `;
+  }
+
+  if (selectedTemplate === "academico") {
+    return `
+      <article class="cv-template template-academico">
+        <header class="tpl-academic-header">
+          <img class="tpl-photo" src="${escapeHtml(imageUrl)}" alt="Foto de perfil">
+          <div>
+            <h2 class="tpl-name">${escapeHtml(profile.name)}</h2>
+            <p class="tpl-headline">${escapeHtml(profile.headline)}</p>
+            <p class="tpl-summary">${escapeHtml(profile.summary)}</p>
+            ${modelBadge}
+          </div>
+        </header>
+        <div class="tpl-academic-divider"></div>
         <div class="tpl-content cv-output">
           ${contentHtml}
         </div>
