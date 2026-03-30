@@ -36,20 +36,7 @@
         </select>
       </div>
 
-      <div class="canva-config">
-        <h3>Canva (diseno automatico)</h3>
-        <input id="canvaTemplateId" type="text" placeholder="Brand Template ID de Canva">
-        <input id="fotoPersona" type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif">
-        <small>
-          Flujo: la IA organiza tu CV y luego Canva lo acomoda en tu plantilla con la foto.
-        </small>
-        <button type="button" onclick="guardarCanvaConfig()" class="btn-secondary">Guardar Canva</button>
-        <button type="button" onclick="conectarCanva()" class="btn-canva">Conectar Canva</button>
-        <div id="canvaStatus"></div>
-      </div>
-
       <button onclick="generarCV()">Generar con IA</button>
-      <button onclick="generarYEnviarCanva()" class="btn-canva-main">Generar + Enviar a Canva</button>
       <button onclick="descargarPDF()">Descargar PDF</button>
     </div>
 

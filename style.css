@@ -41,26 +41,6 @@ textarea, input, select {
   margin-bottom: 12px;
 }
 
-.canva-config {
-  background: #f4fbff;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  border-left: 4px solid #1f7a8c;
-}
-
-.canva-config h3 {
-  margin-top: 0;
-  color: #1b4b58;
-  font-size: 16px;
-}
-
-.canva-config small {
-  display: block;
-  margin: 8px 0;
-  color: #475b63;
-}
-
 .model-config label {
   display: block;
   margin-bottom: 6px;
@@ -120,24 +100,6 @@ hr {
   background: #218838;
 }
 
-.btn-canva {
-  background: #1f7a8c;
-  color: white;
-}
-
-.btn-canva:hover {
-  background: #176373;
-}
-
-.btn-canva-main {
-  background: #0f766e;
-  color: white;
-}
-
-.btn-canva-main:hover {
-  background: #0b5e58;
-}
-
 button {
   width: 100%;
   padding: 10px 15px;
@@ -148,12 +110,12 @@ button {
   margin-top: 8px;
 }
 
-button:not(.btn-secondary):not(.btn-canva):not(.btn-canva-main) {
+button:not(.btn-secondary) {
   background: #007bff;
   color: white;
 }
 
-button:not(.btn-secondary):not(.btn-canva):not(.btn-canva-main):hover {
+button:not(.btn-secondary):hover {
   background: #0062cc;
 }
 
@@ -171,24 +133,6 @@ button:not(.btn-secondary):not(.btn-canva):not(.btn-canva-main):hover {
   color: #dc3545;
 }
 
-#canvaStatus {
-  margin-top: 10px;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.canva-success {
-  color: #0f766e;
-}
-
-.canva-error {
-  color: #dc2626;
-}
-
-.canva-info {
-  color: #1d4ed8;
-}
-
 .cv-output {
   white-space: pre-wrap;
   line-height: 1.5;
@@ -198,47 +142,6 @@ button:not(.btn-secondary):not(.btn-canva):not(.btn-canva-main):hover {
   margin: 0 0 10px;
   color: #3a3a3a;
   font-size: 13px;
-}
-
-.warning-box {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-
-.warning-box ul {
-  margin: 8px 0 0 18px;
-}
-
-.canva-result {
-  border: 1px solid #bfe4ea;
-  background: #f0fcff;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-
-.canva-result h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-  color: #0f4c5c;
-}
-
-.canva-thumb {
-  max-width: 100%;
-  max-height: 220px;
-  border-radius: 8px;
-  border: 1px solid #c4dce3;
-  display: block;
-  margin: 8px 0;
-}
-
-.canva-fields {
-  color: #334155;
-  font-size: 13px;
-  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {
