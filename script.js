@@ -42,6 +42,8 @@ async function generarCV() {
       ? "http://localhost:5000/api/generar-cv"
       : "/.netlify/functions/generar_cv";
 
+    console.log("Enviando solicitud a:", apiUrl);
+    
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
@@ -57,7 +59,20 @@ async function generarCV() {
       })
     });
 
-    const data = await response.json();
+    console.log("Status de respuesta:", response.status);
+    
+    // Obtener el texto de la respuesta primero
+    const responseText = await response.text();
+    console.log("Respuesta del servidor:", responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("Error al parsear JSON:", parseError);
+      document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: La respuesta del servidor no es válida. Verifica tu API Key y que esté activa.</p>`;
+      return;
+    }
 
     if (data.success) {
       document.getElementById("preview").innerHTML = `
@@ -65,10 +80,11 @@ async function generarCV() {
         <p>${data.texto.replace(/\n/g, "<br>")}</p>
       `;
     } else {
-      document.getElementById("preview").innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+      document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: ${data.error}</p>`;
     }
   } catch (error) {
-    document.getElementById("preview").innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+    console.error("Error completo:", error);
+    document.getElementById("preview").innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
   }
 }
 
