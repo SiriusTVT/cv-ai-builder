@@ -1718,26 +1718,45 @@ async function descargarPDF() {
     return;
   }
 
+  let exportWrapper = null;
+
   try {
-    const canvas = await window.html2canvas(templateElement, {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // Render en un clon offscreen con ancho A4 para evitar compresion visual.
+    const a4WidthPx = 794;
+    const templateClone = templateElement.cloneNode(true);
+    templateClone.style.width = `${a4WidthPx}px`;
+    templateClone.style.maxWidth = `${a4WidthPx}px`;
+    templateClone.style.margin = "0";
+    templateClone.style.borderRadius = "0";
+    templateClone.style.boxShadow = "none";
+
+    exportWrapper = document.createElement("div");
+    exportWrapper.style.position = "fixed";
+    exportWrapper.style.left = "-99999px";
+    exportWrapper.style.top = "0";
+    exportWrapper.style.width = `${a4WidthPx}px`;
+    exportWrapper.style.background = "#ffffff";
+    exportWrapper.style.zIndex = "-1";
+    exportWrapper.appendChild(templateClone);
+    document.body.appendChild(exportWrapper);
+
+    const canvas = await window.html2canvas(templateClone, {
       scale: 2,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
-      width: templateElement.scrollWidth,
-      height: templateElement.scrollHeight
+      windowWidth: a4WidthPx,
+      width: a4WidthPx,
+      height: templateClone.scrollHeight
     });
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    const margin = 8;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const printableWidth = pageWidth - margin * 2;
-    const printableHeight = pageHeight - margin * 2;
-
-    const pxPerMm = canvas.width / printableWidth;
-    const pageCanvasHeightPx = Math.floor(printableHeight * pxPerMm);
+    const mmPerPx = pageWidth / canvas.width;
+    const pageCanvasHeightPx = Math.floor(pageHeight / mmPerPx);
 
     let renderedHeightPx = 0;
     let pageIndex = 0;
@@ -1766,13 +1785,13 @@ async function descargarPDF() {
       );
 
       const imgData = pageCanvas.toDataURL("image/png");
-      const sliceHeightMm = sliceHeightPx / pxPerMm;
+      const sliceHeightMm = sliceHeightPx * mmPerPx;
 
       if (pageIndex > 0) {
         doc.addPage();
       }
 
-      doc.addImage(imgData, "PNG", margin, margin, printableWidth, sliceHeightMm, undefined, "FAST");
+      doc.addImage(imgData, "PNG", 0, 0, pageWidth, sliceHeightMm, undefined, "FAST");
 
       renderedHeightPx += sliceHeightPx;
       pageIndex += 1;
@@ -1783,6 +1802,10 @@ async function descargarPDF() {
     if (preview) {
       const message = error && error.message ? error.message : "Error desconocido";
       preview.innerHTML = `<p style='color: red;'>No se pudo exportar el PDF con diseno: ${escapeHtml(message)}</p>`;
+    }
+  } finally {
+    if (exportWrapper && exportWrapper.parentNode) {
+      exportWrapper.parentNode.removeChild(exportWrapper);
     }
   }
 }
