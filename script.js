@@ -8,7 +8,7 @@ const MODEL_OPTIONS = [
   "openai/gpt-oss-120b:fastest",
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
-const TEMPLATE_OPTIONS = ["corporativo", "minimal", "creativo", "ejecutivo", "moderno", "academico"];
+const TEMPLATE_OPTIONS = ["corporativo"];
 const KNOWN_SECTION_DEFINITIONS = [
   { id: "name", title: "Name", aliases: ["name", "nombre", "nombre completo"] },
   { id: "age", title: "Age", aliases: ["age", "edad"] },
@@ -875,9 +875,32 @@ function renderMissingDataPreview(inputText) {
   previewEl.textContent = buildMissingInformationPreviewFromInput(inputText);
 }
 
+function normalizeRawInputForExtraction(text) {
+  let raw = String(text || "");
+
+  raw = raw.replace(/\p{Extended_Pictographic}+/gu, "\n");
+  raw = raw.replace(/[•·●◦▪■◆◇►▶]+/g, "\n");
+
+  raw = raw.replace(
+    /(nombre|ubicacion|tel[eé]fono|correo|disponibilidad|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\s*:/gi,
+    "\n$1: "
+  );
+
+  raw = raw.replace(
+    /\b(informacion personal|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\b/gi,
+    "\n$1\n"
+  );
+
+  raw = raw.replace(/\s\/\s/g, "\n");
+  raw = raw.replace(/\n{2,}/g, "\n");
+  return raw.trim();
+}
+
 function splitRawFragments(text) {
-  return String(text || "")
-    .split(/[\n\r.;]+/)
+  const normalized = normalizeRawInputForExtraction(text);
+
+  return String(normalized || "")
+    .split(/[\n\r.;|]+/)
     .map((part) => sanitizeDisplayLine(part))
     .filter(Boolean);
 }
@@ -1588,9 +1611,6 @@ async function generarCV() {
   const requestedModel = getSelectedModel();
   const preview = document.getElementById("preview");
 
-  renderDetectedDataPreview(inputLibre);
-  renderMissingDataPreview(inputLibre);
-
   if (!apiKey) {
     preview.innerHTML = "<p style='color: red;'>Primero guarda tu token de Hugging Face.</p>";
     return;
@@ -1787,14 +1807,10 @@ window.addEventListener("DOMContentLoaded", function() {
   renderEmptyPreview();
 
   const inputLibreEl = document.getElementById("inputLibre");
-  renderDetectedDataPreview(inputLibreEl ? inputLibreEl.value : "");
-  renderMissingDataPreview(inputLibreEl ? inputLibreEl.value : "");
 
   if (inputLibreEl) {
     inputLibreEl.addEventListener("input", function() {
       latestUserInputText = inputLibreEl.value.trim();
-      renderDetectedDataPreview(inputLibreEl.value);
-      renderMissingDataPreview(inputLibreEl.value);
     });
   }
 

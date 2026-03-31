@@ -25,16 +25,6 @@
       <textarea id="inputLibre" class="raw-input" placeholder="Pega aquí toda tu información (nombre, experiencia, estudios, habilidades, logros, etc.). La IA la organizará automáticamente en un CV profesional."></textarea>
       <small class="helper-text">Ejemplo: "Soy Ana, desarrolladora frontend con 3 años de experiencia en React..."</small>
 
-      <details class="detected-data-panel">
-        <summary>Datos detectados para enviar a la IA</summary>
-        <pre id="detectedDataPreview" class="detected-data-preview">Escribe tu informacion para ver como se estructura antes de generar.</pre>
-      </details>
-
-      <details class="missing-data-panel" open>
-        <summary>Informacion faltante detectada</summary>
-        <pre id="missingDataPreview" class="missing-data-preview">Escribe tu informacion para identificar que datos faltan antes de generar.</pre>
-      </details>
-
       <input id="imageFile" type="file" accept="image/*">
       <small class="helper-text">Opcional: selecciona una foto desde tu equipo para mostrarla en la plantilla.</small>
       <small id="imageStatus" class="helper-text"></small>
@@ -47,18 +37,6 @@
           <option value="openai/gpt-oss-20b:fastest">GPT-OSS 20B (equilibrado)</option>
           <option value="openai/gpt-oss-120b:fastest">GPT-OSS 120B (mayor calidad)</option>
           <option value="Qwen/Qwen2.5-7B-Instruct-1M:fastest">Qwen 2.5 7B (contexto largo)</option>
-        </select>
-      </div>
-
-      <div class="template-config">
-        <label for="plantillaSalida">Plantilla visual</label>
-        <select id="plantillaSalida">
-          <option value="corporativo" selected>Corporativo (sidebar)</option>
-          <option value="minimal">Minimal centrado</option>
-          <option value="creativo">Creativo en tarjetas</option>
-          <option value="ejecutivo">Ejecutivo premium</option>
-          <option value="moderno">Moderno editorial</option>
-          <option value="academico">Academico formal</option>
         </select>
       </div>
 

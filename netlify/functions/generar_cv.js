@@ -11,9 +11,33 @@ function normalizeSpaces(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeInputForExtraction(text) {
+  let raw = String(text || "");
+
+  // Convierte elementos visuales en separadores para mejorar la deteccion.
+  raw = raw.replace(/\p{Extended_Pictographic}+/gu, "\n");
+  raw = raw.replace(/[•·●◦▪■◆◇►▶]+/g, "\n");
+
+  raw = raw.replace(
+    /(nombre|ubicacion|tel[eé]fono|correo|disponibilidad|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\s*:/gi,
+    "\n$1: "
+  );
+
+  raw = raw.replace(
+    /\b(informacion personal|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\b/gi,
+    "\n$1\n"
+  );
+
+  raw = raw.replace(/\s\/\s/g, "\n");
+  raw = raw.replace(/\n{2,}/g, "\n");
+  return raw.trim();
+}
+
 function splitFragments(text) {
-  return String(text || "")
-    .split(/[\n\r.;]+/)
+  const normalized = normalizeInputForExtraction(text);
+
+  return String(normalized || "")
+    .split(/[\n\r.;|]+/)
     .map((part) => normalizeSpaces(part))
     .filter(Boolean);
 }
@@ -135,14 +159,30 @@ function extractAvailabilityHint(text) {
 
 function buildStructuredInputBlock(inputLibre) {
   const raw = String(inputLibre || "");
-  const fragments = splitFragments(raw);
+  const normalizedInput = normalizeInputForExtraction(raw);
+  const fragments = splitFragments(normalizedInput);
 
-  const nameHint = extractNameHint(raw);
-  const locationHint = extractLocationHint(raw);
-  const availabilityHint = extractAvailabilityHint(raw);
+  const nameHint = extractNameHint(normalizedInput) || extractNameHint(raw);
+  const locationHint = extractLocationHint(normalizedInput);
+  const availabilityHint = extractAvailabilityHint(normalizedInput);
   const { emails, phones } = extractContactHints(raw);
 
   const educationData = extractEducationInstitutionHints(fragments);
+  const titleHints = extractFragmentsByKeywords(
+    fragments,
+    ["titulo profesional", "profesion", "cargo", "rol", "ingenier", "developer", "desarrollador", "analista", "manager", "estudiante"],
+    3
+  );
+  const summaryHints = extractFragmentsByKeywords(
+    fragments,
+    ["perfil profesional", "perfil", "resumen", "summary", "objetivo profesional", "sobre mi"],
+    4
+  );
+  const strengthsHints = extractFragmentsByKeywords(
+    fragments,
+    ["fortalezas", "strengths", "analit", "liderazgo", "comunicacion", "adaptable", "detalle", "resolucion"],
+    5
+  );
   const experienceHints = extractFragmentsByKeywords(
     fragments,
     ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"]
@@ -160,6 +200,39 @@ function buildStructuredInputBlock(inputLibre) {
     ["ingles", "english", "bilingue", "idioma", "languages", "lenguajes"],
     3
   );
+  const courseHints = extractFragmentsByKeywords(
+    fragments,
+    ["curso", "certificacion", "certificado", "diplomado", "bootcamp", "scrum", "aws", "azure", "oracle"],
+    4
+  );
+
+  const contactHints = uniqueFirst(emails.concat(phones).concat(locationHint ? [locationHint] : []), 4);
+
+  const missingCriticalFields = [];
+  if (!nameHint) {
+    missingCriticalFields.push("Name");
+  }
+  if (!emails.length && !phones.length) {
+    missingCriticalFields.push("Contact");
+  }
+  if (!locationHint) {
+    missingCriticalFields.push("Location");
+  }
+  if (!summaryHints.length) {
+    missingCriticalFields.push("Professional summary");
+  }
+  if (!experienceHints.length) {
+    missingCriticalFields.push("Work experience");
+  }
+  if (!educationData.educationHints.length && !educationData.universityHints.length && !educationData.schoolHints.length) {
+    missingCriticalFields.push("Education");
+  }
+  if (!skillHints.length) {
+    missingCriticalFields.push("Technical skills");
+  }
+  if (!languageHints.length) {
+    missingCriticalFields.push("Languages");
+  }
 
   function asBullets(title, values) {
     if (values.length) {
@@ -174,15 +247,21 @@ function buildStructuredInputBlock(inputLibre) {
     `- Name hint: ${nameHint || "Sin dato explicito"}`,
     `- Location hint: ${locationHint || "Sin dato explicito"}`,
     `- Availability hint: ${availabilityHint}`,
+    asBullets("Professional title hint", titleHints),
+    asBullets("Professional summary hint", summaryHints),
+    asBullets("Core strengths hint", strengthsHints),
     asBullets("Email hint", emails),
     asBullets("Phone hint", phones),
+    asBullets("Contact hint", contactHints),
     asBullets("University hint", educationData.universityHints),
     asBullets("School hint", educationData.schoolHints),
     asBullets("Education hint", educationData.educationHints),
     asBullets("Work experience hint", experienceHints),
     asBullets("Projects hint", projectHints),
     asBullets("Technical skills hint", skillHints),
-    asBullets("Languages hint", languageHints)
+    asBullets("Courses and certifications hint", courseHints),
+    asBullets("Languages hint", languageHints),
+    asBullets("Missing critical field", missingCriticalFields)
   ].join("\n");
 }
 
@@ -203,8 +282,12 @@ ${structuredBlock}
 
 INSTRUCCION CRITICA:
 - Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
+- Interpreta correctamente texto desordenado (emojis, bloques largos, listas informales) y conviertelo a estructura profesional.
+- Debes entregar TODAS las secciones obligatorias en el orden exacto y sin dejar secciones vacias.
 - Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
 - En Education, conserva explicitamente los nombres de universidad y colegio cuando aparezcan.
+- Si en "Missing critical field" aparece un campo faltante, completa esa seccion con redaccion profesional util, clara y coherente.
+- Cuando falten datos concretos, usa inferencias prudentes y texto neutro profesional sin inventar nombres, fechas exactas ni cifras falsas.
 - No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
@@ -227,6 +310,7 @@ REGLAS DE DETALLE:
 - Work experience: por cada rol incluye empresa, cargo, periodo y entre 4 y 7 bullets de logros/responsabilidades.
 - Projects: incluye al menos 2 proyectos cuando existan datos; describe objetivo, stack y resultado.
 - Technical skills: agrupa por categorias (Programming, Data/BI, Databases, DevOps/Cloud, Tools).
+- Education: cuando existan pistas, prioriza primero universidad y colegio con su contexto academico.
 - Courses and certifications / Languages / Contact / Time availability: no las omitas.
 - Longitud objetivo: minimo 55 lineas utiles y salida extensa cuando haya datos suficientes.
 - Si falta un dato, completa con texto profesional util y legible para esa seccion.
@@ -354,7 +438,7 @@ exports.handler = async function handler(event) {
           }
         ],
         temperature: 0.4,
-        max_tokens: 1300,
+        max_tokens: 1600,
         stream: false
       };
 

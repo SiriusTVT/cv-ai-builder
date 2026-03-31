@@ -20,9 +20,34 @@ def normalize_spaces(text):
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
-def split_fragments(text):
+def normalize_input_for_extraction(text):
     raw = str(text or "")
-    parts = re.split(r"[\n\r.;]+", raw)
+
+    # Reemplaza emojis y marcadores visuales por saltos para separar bloques.
+    raw = re.sub(r"[\U0001F300-\U0001FAFF]+", "\n", raw)
+    raw = re.sub(r"[•·●◦▪■◆◇►▶]+", "\n", raw)
+
+    # Inserta saltos antes de etiquetas frecuentes en texto libre.
+    raw = re.sub(
+        r"(?i)(nombre|ubicacion|tel[eé]fono|correo|disponibilidad|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\s*:",
+        r"\n\1: ",
+        raw,
+    )
+
+    raw = re.sub(
+        r"(?i)\b(informacion personal|perfil profesional|experiencia|educaci[oó]n|habilidades t[eé]cnicas|fortalezas|idiomas)\b",
+        lambda m: f"\n{m.group(1)}\n",
+        raw,
+    )
+
+    raw = raw.replace(" / ", "\n")
+    raw = re.sub(r"\n{2,}", "\n", raw)
+    return raw.strip()
+
+
+def split_fragments(text):
+    raw = normalize_input_for_extraction(text)
+    parts = re.split(r"[\n\r.;|]+", raw)
     cleaned = [normalize_spaces(part) for part in parts]
     return [part for part in cleaned if part]
 
@@ -133,14 +158,30 @@ def extract_availability_hint(text):
 
 def build_structured_input_block(input_libre):
     raw = str(input_libre or "")
-    fragments = split_fragments(raw)
+    normalized_input = normalize_input_for_extraction(raw)
+    fragments = split_fragments(normalized_input)
 
-    name_hint = extract_name_hint(raw)
-    location_hint = extract_location_hint(raw)
-    availability_hint = extract_availability_hint(raw)
+    name_hint = extract_name_hint(normalized_input) or extract_name_hint(raw)
+    location_hint = extract_location_hint(normalized_input)
+    availability_hint = extract_availability_hint(normalized_input)
     emails, phones = extract_contact_hints(raw)
 
     university_hints, school_hints, education_hints = extract_education_institution_hints(fragments)
+    title_hints = extract_fragments_by_keywords(
+        fragments,
+        ["titulo profesional", "profesion", "cargo", "rol", "ingenier", "developer", "desarrollador", "analista", "manager", "estudiante"],
+        3,
+    )
+    summary_hints = extract_fragments_by_keywords(
+        fragments,
+        ["perfil profesional", "perfil", "resumen", "summary", "objetivo profesional", "sobre mi"],
+        4,
+    )
+    strengths_hints = extract_fragments_by_keywords(
+        fragments,
+        ["fortalezas", "strengths", "analit", "liderazgo", "comunicacion", "adaptable", "detalle", "resolucion"],
+        5,
+    )
     experience_hints = extract_fragments_by_keywords(
         fragments,
         ["experiencia", "trabaj", "aprendiz", "practic", "manager", "empresa", "cargo", "rol", "desde", "actualmente"],
@@ -158,6 +199,31 @@ def build_structured_input_block(input_libre):
         ["ingles", "english", "bilingue", "idioma", "languages", "lenguajes"],
         3,
     )
+    course_hints = extract_fragments_by_keywords(
+        fragments,
+        ["curso", "certificacion", "certificado", "diplomado", "bootcamp", "scrum", "aws", "azure", "oracle"],
+        4,
+    )
+
+    contact_hints = unique_first(emails + phones + ([location_hint] if location_hint else []), 4)
+
+    missing_critical_fields = []
+    if not name_hint:
+        missing_critical_fields.append("Name")
+    if not (emails or phones):
+        missing_critical_fields.append("Contact")
+    if not location_hint:
+        missing_critical_fields.append("Location")
+    if not summary_hints:
+        missing_critical_fields.append("Professional summary")
+    if not experience_hints:
+        missing_critical_fields.append("Work experience")
+    if not (education_hints or university_hints or school_hints):
+        missing_critical_fields.append("Education")
+    if not skill_hints:
+        missing_critical_fields.append("Technical skills")
+    if not language_hints:
+        missing_critical_fields.append("Languages")
 
     def as_bullets(title, values):
         if values:
@@ -169,15 +235,21 @@ def build_structured_input_block(input_libre):
         f"- Name hint: {name_hint or 'Sin dato explicito'}",
         f"- Location hint: {location_hint or 'Sin dato explicito'}",
         f"- Availability hint: {availability_hint}",
+        as_bullets("Professional title hint", title_hints),
+        as_bullets("Professional summary hint", summary_hints),
+        as_bullets("Core strengths hint", strengths_hints),
         as_bullets("Email hint", emails),
         as_bullets("Phone hint", phones),
+        as_bullets("Contact hint", contact_hints),
         as_bullets("University hint", university_hints),
         as_bullets("School hint", school_hints),
         as_bullets("Education hint", education_hints),
         as_bullets("Work experience hint", experience_hints),
         as_bullets("Projects hint", project_hints),
         as_bullets("Technical skills hint", skill_hints),
+        as_bullets("Courses and certifications hint", course_hints),
         as_bullets("Languages hint", language_hints),
+        as_bullets("Missing critical field", missing_critical_fields),
     ]
 
     return "\n".join(lines)
@@ -200,8 +272,12 @@ PRIORIDADES:
 
 INSTRUCCION CRITICA:
 - Usa primero los DATOS ESTRUCTURADOS DETECTADOS y luego completa con el texto original.
+- Interpreta correctamente texto desordenado (emojis, bloques largos, listas informales) y conviertelo a estructura profesional.
+- Debes entregar TODAS las secciones obligatorias en el orden exacto y sin dejar secciones vacias.
 - Si hay pistas para Education, Work experience, Projects o Technical skills, debes incorporarlas en esas secciones.
 - En Education, conserva explicitamente los nombres de universidad y colegio cuando aparezcan.
+- Si en "Missing critical field" aparece un campo faltante, completa esa seccion con redaccion profesional util, clara y coherente.
+- Cuando falten datos concretos, usa inferencias prudentes y texto neutro profesional sin inventar nombres, fechas exactas ni cifras falsas.
 - No reemplaces datos detectados con frases genericas.
 
 SECCIONES OBLIGATORIAS (usa exactamente estos encabezados):
@@ -224,6 +300,7 @@ REGLAS DE DETALLE:
 - Work experience: por cada rol incluye empresa, cargo, periodo y entre 4 y 7 bullets de logros/responsabilidades.
 - Projects: incluye al menos 2 proyectos cuando existan datos; describe objetivo, stack y resultado.
 - Technical skills: agrupa por categorias (Programming, Data/BI, Databases, DevOps/Cloud, Tools).
+- Education: cuando existan pistas, prioriza primero universidad y colegio con su contexto academico.
 - Courses and certifications / Languages / Contact / Time availability: no las omitas.
 - Longitud objetivo: minimo 55 lineas utiles y salida extensa cuando haya datos suficientes.
 - Si falta un dato, completa con texto profesional util y legible para esa seccion.
@@ -320,7 +397,7 @@ def generar_cv():
                     },
                 ],
                 "temperature": 0.4,
-                "max_tokens": 1300,
+                "max_tokens": 1600,
                 "stream": False,
             }
 
