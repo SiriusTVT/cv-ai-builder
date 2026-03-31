@@ -8,7 +8,7 @@ const MODEL_OPTIONS = [
   "openai/gpt-oss-120b:fastest",
   "Qwen/Qwen2.5-7B-Instruct-1M:fastest"
 ];
-const TEMPLATE_OPTIONS = ["corporativo"];
+const TEMPLATE_OPTIONS = ["corporativo", "corporativo2"];
 const KNOWN_SECTION_DEFINITIONS = [
   { id: "name", title: "Name", aliases: ["name", "nombre", "nombre completo"] },
   { id: "age", title: "Age", aliases: ["age", "edad"] },
@@ -275,6 +275,10 @@ function ensureReadableValue(text, sectionId) {
 }
 
 function getTemplateLabel(templateValue) {
+  if (templateValue === "corporativo2") {
+    return "Corporativo 2";
+  }
+
   if (templateValue === "minimal") {
     return "Minimal centrado";
   }
@@ -1510,6 +1514,31 @@ function buildTemplateMarkup(rawText, modelUsed) {
       </ul>
     </section>
   `;
+
+  if (selectedTemplate === "corporativo2") {
+    return `
+      <article class="cv-template template-corporativo-2">
+        <aside class="tpl2-sidebar">
+          <img class="tpl2-photo" src="${escapeHtml(imageUrl)}" alt="Foto de perfil">
+          <h2 class="tpl2-side-name">${escapeHtml(profile.name)}</h2>
+          <p class="tpl2-side-line">${escapeHtml(profile.headline)}</p>
+          ${modelBadge}
+          <div class="tpl2-side-content cv-output">
+            ${corporateContent.sidebarHtml || sidebarFallback}
+          </div>
+        </aside>
+        <section class="tpl2-main">
+          <header class="tpl2-hero">
+            <h1 class="tpl2-name">${escapeHtml(profile.name)}</h1>
+            <h3 class="tpl2-headline">${escapeHtml(profile.headline)}</h3>
+          </header>
+          <div class="tpl2-main-content tpl-content cv-output">
+            ${corporateContent.mainHtml}
+          </div>
+        </section>
+      </article>
+    `;
+  }
 
   const ageBlock = profile.age
     ? `<p class="tpl-age">${escapeHtml(profile.age)}</p>`

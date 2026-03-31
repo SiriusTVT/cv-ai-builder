@@ -394,6 +394,139 @@ button:not(.btn-secondary):hover {
   color: #111827;
 }
 
+.template-corporativo-2 {
+  display: flex;
+  border: 1px solid #d1d5db;
+  background: #fff;
+}
+
+.template-corporativo-2 .tpl2-sidebar {
+  width: 30%;
+  background: #1f2937;
+  color: #fff;
+  padding: 26px 18px;
+}
+
+.template-corporativo-2 .tpl2-photo {
+  width: 106px;
+  height: 106px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  display: block;
+  margin: 0 auto 14px;
+  background: #d1d5db;
+}
+
+.template-corporativo-2 .tpl2-side-name {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.template-corporativo-2 .tpl2-side-line {
+  margin: 6px 0 12px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.template-corporativo-2 .tpl-model {
+  margin: 0 0 12px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
+
+.template-corporativo-2 .tpl2-side-content section {
+  margin: 0 0 18px;
+}
+
+.template-corporativo-2 .tpl2-side-content section:last-child {
+  margin-bottom: 0;
+}
+
+.template-corporativo-2 .tpl2-side-content h3 {
+  margin: 0 0 9px;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  padding-bottom: 5px;
+  color: #fff;
+}
+
+.template-corporativo-2 .tpl2-side-content p,
+.template-corporativo-2 .tpl2-side-content li {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #e5e7eb;
+}
+
+.template-corporativo-2 .tpl2-side-content ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.template-corporativo-2 .tpl2-main {
+  width: 70%;
+  padding: 28px;
+  background: #fff;
+}
+
+.template-corporativo-2 .tpl2-hero {
+  margin: 0 0 20px;
+}
+
+.template-corporativo-2 .tpl2-name {
+  margin: 0;
+  font-size: 28px;
+  color: #111827;
+}
+
+.template-corporativo-2 .tpl2-headline {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-weight: 400;
+  font-size: 18px;
+}
+
+.template-corporativo-2 .tpl2-main-content section {
+  margin: 0 0 22px;
+}
+
+.template-corporativo-2 .tpl2-main-content section:last-child {
+  margin-bottom: 0;
+}
+
+.template-corporativo-2 .tpl2-main-content h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 5px;
+  color: #1f2937;
+  text-transform: uppercase;
+}
+
+.template-corporativo-2 .tpl2-main-content p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #1f2937;
+  line-height: 1.55;
+}
+
+.template-corporativo-2 .tpl2-main-content ul {
+  margin: 5px 0 0 15px;
+  padding: 0;
+}
+
+.template-corporativo-2 .tpl2-main-content li {
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #1f2937;
+}
+
 .template-minimal .tpl-photo,
 .template-ejecutivo .tpl-photo,
 .template-academico .tpl-photo {
@@ -618,6 +751,15 @@ button:not(.btn-secondary):hover {
 
   .template-corporativo {
     grid-template-columns: 1fr;
+  }
+
+  .template-corporativo-2 {
+    flex-direction: column;
+  }
+
+  .template-corporativo-2 .tpl2-sidebar,
+  .template-corporativo-2 .tpl2-main {
+    width: 100%;
   }
 
   .template-corporativo .tpl-sidebar {
